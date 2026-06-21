@@ -4,5 +4,5 @@ class ReminderWithId {
   final String id;
   final MedicineReminder reminder;
 
-  ReminderWithId({required this.id, required this.reminder});+
+  ReminderWithId({required this.id, required this.reminder});
 }
