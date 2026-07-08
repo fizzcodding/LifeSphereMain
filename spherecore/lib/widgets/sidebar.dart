@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import '../services/auth_services.dart';
 import '../themes/app_theme.dart';
 import '../utils/toast.dart';
 
 class AppLogoTitle extends StatelessWidget {
   const AppLogoTitle({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Image.asset('assets/images/logo_main.png', height: 34);
@@ -14,7 +15,9 @@ class AppLogoTitle extends StatelessWidget {
 
 class AppBottomNav extends StatelessWidget {
   final String currentRoute;
+
   const AppBottomNav({super.key, required this.currentRoute});
+
   static const _routes = [
     '/dashboard',
     '/vital32',
@@ -23,6 +26,7 @@ class AppBottomNav extends StatelessWidget {
     '/members',
     '/profile',
   ];
+
   static const _icons = [
     Icons.memory_rounded,
     Icons.monitor_heart_rounded,
@@ -31,6 +35,7 @@ class AppBottomNav extends StatelessWidget {
     Icons.group_rounded,
     Icons.person_rounded,
   ];
+
   static const _labels = [
     'Dashboard',
     'Vital32',
@@ -39,6 +44,7 @@ class AppBottomNav extends StatelessWidget {
     'Members',
     'Profile',
   ];
+
   @override
   Widget build(BuildContext context) {
     final routeIndex = _routes.indexOf(currentRoute);
@@ -63,9 +69,27 @@ class AppBottomNav extends StatelessWidget {
               Navigator.pushReplacementNamed(context, route);
             }
           },
-        ), //Bottom Navigation Bar
-      ), //SafeArea
-    ); // Container
+        ),
+      ),
+    );
+  }
+}
+
+class AppLogoutButton extends StatelessWidget {
+  const AppLogoutButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Logout',
+      icon: const Icon(Icons.logout_rounded),
+      onPressed: () async {
+        await AuthService.logout();
+        if (!context.mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+        showSuccessToast('Logged out successfully.');
+      },
+    );
   }
 }
 
@@ -88,7 +112,13 @@ class AppUserAvatar extends StatelessWidget {
 class PremiumPanel extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-  const PremiumPanel({super.key, required this.child, this.padding = const EdgeInsets.all(16.0)});
+
+  const PremiumPanel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+  });
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -96,6 +126,7 @@ class PremiumPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppTheme.border),
         boxShadow: [AppTheme.softShadow],
       ),
       child: child,
