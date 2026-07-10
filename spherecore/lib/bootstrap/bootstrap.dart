@@ -69,16 +69,16 @@ class _AppBootstrapState extends State<AppBootstrap> {
           }
           return StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
-	            builder: (context, snapshot) {
-	              if (snapshot.connectionState == ConnectionState.waiting) {
-	                return MaterialApp(
-	                  home: const SplashScreen(),
-	                  routes: {
-	                    '/login': (context) => const LoginScreen(),
-	                    '/dashboard': (context) => const DashboardScreen(),
-	                  },
-	                );
-	              }
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return MaterialApp(
+                  home: const SplashScreen(),
+                  routes: {
+                    '/login': (context) => const LoginScreen(),
+                    '/dashboard': (context) => const DashboardScreen(),
+                  },
+                );
+              }
 
               final user = snapshot.data;
               if (user != null) {

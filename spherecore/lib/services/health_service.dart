@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
 class HealthService {
   static const _geminiKey = String.fromEnvironment('GEMINI_API_KEY');
 
@@ -124,8 +124,8 @@ BIOMETRICS:
 - Steps today: $steps
 - Hydration: $hydration ml
 - Heart Rate: $hr bpm
-- SpO2: ${spo2}%
-- Body Temp: ${temp}°C
+- SpO2: $spo2%
+- Body Temp: $temp°C
 
 RULES:
 - each tip must be a direct action, not advice (say "drink 200ml now" not "stay hydrated")

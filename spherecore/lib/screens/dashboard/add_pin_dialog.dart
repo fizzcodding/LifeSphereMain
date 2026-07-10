@@ -33,7 +33,6 @@ class _AddPinDialogState extends State<AddPinDialog> {
     try {
       await FirestoreService.addPin(newPin);
       showSuccessToast('Pin added');
-      await Future.delayed(const Duration(milliseconds: 100));
       if (mounted) Navigator.pop(context);
     } catch (_) {
       showErrorToast('Failed to add pin');

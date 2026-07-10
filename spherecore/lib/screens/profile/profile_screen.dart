@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/health_service.dart';
 import '../../themes/app_theme.dart';
+import '../../utils/toast.dart';
 import '../../widgets/sidebar.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -70,9 +71,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty || _selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter name and birth date')),
-      );
+      showErrorToast('Please enter name and birth date');
       return;
     }
     await _healthService.updateProfile(
@@ -81,9 +80,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _phonetagController.text.trim(),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile saved.')),
-    );
+    showSuccessToast('Profile saved.');
   }
 
   @override
