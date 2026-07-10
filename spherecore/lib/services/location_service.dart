@@ -6,77 +6,57 @@ import '../models/gps_target.dart';
 
 class LocationService {
   static final _db = FirebaseDatabase.instance.ref();
-  static StreamSubscription<Position>? _positionStreamSubscription;
+  static StreamSubscription<Position>? _subscription;
 
   static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   static Future<bool> startTracking() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return false;
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return false;
-    }
-
-    permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return false;
-      }
+      if (permission == LocationPermission.denied) return false;
     }
-
-    if (permission == LocationPermission.deniedForever) {
-      return false;
-    }
+    if (permission == LocationPermission.deniedForever) return false;
 
     final uid = _uid;
     if (uid == null) return false;
 
     try {
-      final initialPosition = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
-      await _updateFirebase(uid, initialPosition);
+      await _updateFirebase(uid, pos);
     } catch (_) {}
 
-    _positionStreamSubscription =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 0,
-          ),
-        ).listen(
-          (Position position) {
-            _updateFirebase(uid, position);
-          },
-          onError: (_) {
-            stopTracking();
-          },
-          cancelOnError: true,
-        );
+    _subscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen(
+      (pos) => _updateFirebase(uid, pos),
+      onError: (_) => stopTracking(),
+      cancelOnError: true,
+    );
 
     return true;
   }
 
   static void stopTracking() {
-    _positionStreamSubscription?.cancel();
-    _positionStreamSubscription = null;
+    _subscription?.cancel();
+    _subscription = null;
   }
 
-  static Future<void> _updateFirebase(String uid, Position position) async {
+  static Future<void> _updateFirebase(String uid, Position pos) async {
     try {
-      final targetRef = _db.child("users/$uid/target");
-      final gpsData = GpsTarget(
-        lat: position.latitude,
-        lon: position.longitude,
+      await _db.child('users/$uid/target').set(
+        GpsTarget(lat: pos.latitude, lon: pos.longitude).toJson(),
       );
-      await targetRef.set(gpsData.toJson());
     } catch (_) {}
   }
 
-  static bool get isTracking => _positionStreamSubscription != null;
+  static bool get isTracking => _subscription != null;
 }

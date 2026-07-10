@@ -47,8 +47,7 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final routeIndex = _routes.indexOf(currentRoute);
-    final index = routeIndex < 0 ? 0 : routeIndex;
+    final idx = _routes.indexOf(currentRoute);
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface,
@@ -57,14 +56,14 @@ class AppBottomNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: BottomNavigationBar(
-          currentIndex: index,
+          currentIndex: idx < 0 ? 0 : idx,
           type: BottomNavigationBarType.fixed,
           items: [
             for (var i = 0; i < _icons.length; i++)
               BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i]),
           ],
-          onTap: (nextIndex) {
-            final route = _routes[nextIndex];
+          onTap: (next) {
+            final route = _routes[next];
             if (route != currentRoute) {
               Navigator.pushReplacementNamed(context, route);
             }

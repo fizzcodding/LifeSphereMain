@@ -1,14 +1,14 @@
- import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'bootstrap/bootstrap.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const HollowCoreApp());
+  runApp(const SphereCoreApp());
 }
 
-class HollowCoreApp extends StatelessWidget {
-  const HollowCoreApp({super.key});
+class SphereCoreApp extends StatelessWidget {
+  const SphereCoreApp({super.key});
 
   @override
   Widget build(BuildContext context) {

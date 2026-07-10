@@ -1,43 +1,45 @@
 import 'package:flutter/material.dart';
 import '../../models/virtual_pin.dart';
-import '../../services/firestore_service.dart';
+import '../../services/database_service.dart';
 import '../../themes/app_theme.dart';
 import '../../utils/toast.dart';
 
 class AddPinDialog extends StatefulWidget {
   const AddPinDialog({super.key});
+
   @override
   State<AddPinDialog> createState() => _AddPinDialogState();
 }
 
 class _AddPinDialogState extends State<AddPinDialog> {
-  final _labelController = TextEditingController();
-  final _pinController = TextEditingController();
-  bool isLoading = false;
+  final _labelCtrl = TextEditingController();
+  final _pinCtrl = TextEditingController();
+  bool _loading = false;
+
   @override
   void dispose() {
-    _labelController.dispose();
-    _pinController.dispose();
+    _labelCtrl.dispose();
+    _pinCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _addPin() async {
-    final label = _labelController.text.trim();
-    final pin = int.tryParse(_pinController.text.trim());
+  Future<void> _add() async {
+    final label = _labelCtrl.text.trim();
+    final pin = int.tryParse(_pinCtrl.text.trim());
     if (label.isEmpty || pin == null) {
       showErrorToast('Please enter a valid label and pin number');
       return;
     }
-    setState(() => isLoading = true);
-    final newPin = VirtualPin(id: '', label: label, pin: pin, state: false);
+
+    setState(() => _loading = true);
     try {
-      await FirestoreService.addPin(newPin);
+      await DatabaseService.addPin(VirtualPin(id: '', label: label, pin: pin, state: false));
       showSuccessToast('Pin added');
       if (mounted) Navigator.pop(context);
     } catch (_) {
       showErrorToast('Failed to add pin');
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -49,12 +51,12 @@ class _AddPinDialogState extends State<AddPinDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
-            controller: _labelController,
+            controller: _labelCtrl,
             decoration: const InputDecoration(labelText: 'Label'),
           ),
           const SizedBox(height: 20),
           TextField(
-            controller: _pinController,
+            controller: _pinCtrl,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(labelText: 'Pin'),
           ),
@@ -63,21 +65,15 @@ class _AddPinDialogState extends State<AddPinDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(
-            'Cancel',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
+          child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: isLoading ? null : _addPin,
-          child: isLoading
+          onPressed: _loading ? null : _add,
+          child: _loading
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.surface,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.surface),
                 )
               : const Text('Add'),
         ),

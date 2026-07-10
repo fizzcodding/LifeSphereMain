@@ -9,61 +9,57 @@ class ReminderScheduler {
   factory ReminderScheduler() => _instance;
   ReminderScheduler._internal();
 
-  Timer? _checkTimer;
-  List<ReminderWithId> _currentReminders = [];
-  StreamSubscription? _reminderSubscription;
+  Timer? _timer;
+  List<ReminderWithId> _reminders = [];
+  StreamSubscription? _subscription;
+
+  static const _dayMap = {
+    'Mon': 1,
+    'Tue': 2,
+    'Wed': 3,
+    'Thu': 4,
+    'Fri': 5,
+    'Sat': 6,
+    'Sun': 7,
+  };
+
+  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   void start() {
-    _reminderSubscription?.cancel();
-    _reminderSubscription = ReminderService.getReminders().listen((reminders) {
-      _currentReminders = reminders;
-      _syncPersistentNotifications();
-      _checkReminders();
+    _subscription?.cancel();
+    _subscription = ReminderService.getReminders().listen((reminders) {
+      _reminders = reminders;
+      _sync();
+      _check();
     });
 
-    _checkTimer?.cancel();
-    _checkTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      _checkReminders();
-    });
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _check());
   }
 
   void stop() {
-    _reminderSubscription?.cancel();
-    _checkTimer?.cancel();
+    _subscription?.cancel();
+    _timer?.cancel();
   }
 
-  Future<void> _syncPersistentNotifications() async {
-    final notificationService = NotificationService();
-    await notificationService.cancelAll();
+  Future<void> _sync() async {
+    final svc = NotificationService();
+    await svc.cancelAll();
 
-    final dayMap = {
-      "Mon": 1,
-      "Tue": 2,
-      "Wed": 3,
-      "Thu": 4,
-      "Fri": 5,
-      "Sat": 6,
-      "Sun": 7,
-    };
-
-    for (final item in _currentReminders) {
+    for (final item in _reminders) {
       final reminder = item.reminder;
-      final format = DateFormat("hh:mm a");
       try {
-        final parsedTime = format.parse(reminder.time);
-
+        final parsed = DateFormat('hh:mm a').parse(reminder.time);
         for (final day in reminder.days) {
-          final weekday = dayMap[day];
+          final weekday = _dayMap[day];
           if (weekday != null) {
-            final notificationId = (item.id + day).hashCode;
-
-            await notificationService.scheduleWeeklyReminder(
-              id: notificationId,
-              title: "Medication Reminder",
+            await svc.scheduleWeeklyReminder(
+              id: (item.id + day).hashCode,
+              title: 'Medication Reminder',
               body: "It's time for ${reminder.name} (${reminder.slot})",
               weekday: weekday,
-              hour: parsedTime.hour,
-              minute: parsedTime.minute,
+              hour: parsed.hour,
+              minute: parsed.minute,
             );
           }
         }
@@ -71,47 +67,28 @@ class ReminderScheduler {
     }
   }
 
-  Future<void> _checkReminders() async {
-    if (_currentReminders.isEmpty) {
-      return;
-    }
+  Future<void> _check() async {
+    if (_reminders.isEmpty) return;
 
     final now = DateTime.now();
-    for (final item in _currentReminders) {
+    for (final item in _reminders) {
       final reminder = item.reminder;
-      final reminderTime = _parseReminderTime(reminder.time);
-      if (reminderTime == null) continue;
-
-      final dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      final todayName = dayNames[now.weekday - 1];
-      if (!reminder.days.contains(todayName)) continue;
-
-      final diff = reminderTime.difference(now).inMinutes;
-
-      if (diff <= 5 && diff >= -2) {
-        await NotificationService().showNotification(
-          id: reminder.hashCode,
-          title: "Medicine Time: ${reminder.name}",
-          body: "It's time for your medication in Slot ${reminder.slot}.",
+      try {
+        final parsed = DateFormat('hh:mm a').parse(reminder.time);
+        final scheduled = DateTime(
+          now.year, now.month, now.day, parsed.hour, parsed.minute,
         );
-      }
-    }
-  }
+        if (!reminder.days.contains(_dayNames[now.weekday - 1])) continue;
 
-  DateTime? _parseReminderTime(String timeStr) {
-    try {
-      final now = DateTime.now();
-      final format = DateFormat("hh:mm a");
-      final parsedTime = format.parse(timeStr);
-      return DateTime(
-        now.year,
-        now.month,
-        now.day,
-        parsedTime.hour,
-        parsedTime.minute,
-      );
-    } catch (_) {
-      return null;
+        final diff = scheduled.difference(now).inMinutes;
+        if (diff <= 5 && diff >= -2) {
+          await NotificationService().showNotification(
+            id: reminder.hashCode,
+            title: 'Medicine Time: ${reminder.name}',
+            body: 'It\'s time for your medication in Slot ${reminder.slot}.',
+          );
+        }
+      } catch (_) {}
     }
   }
 }

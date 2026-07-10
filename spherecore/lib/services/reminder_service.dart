@@ -6,13 +6,12 @@ import '../models/medicine/reminder_model.dart';
 class ReminderService {
   static final _db = FirebaseDatabase.instance.ref();
   static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
   static Stream<List<ReminderWithId>> getReminders() {
     final uid = _uid;
-    if (uid == null) {
-      return Stream.value([]);
-    }
-    final reminderRef = _db.child("users/$uid/reminders");
-    return reminderRef.onValue.map((event) {
+    if (uid == null) return Stream.value([]);
+
+    return _db.child('users/$uid/reminders').onValue.map((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data == null) return [];
       return data.entries.map((entry) {
@@ -29,8 +28,7 @@ class ReminderService {
   static Future<void> addReminder(MedicineReminder reminder) async {
     final uid = _uid;
     if (uid == null) return;
-    final newRef = _db.child("users/$uid/reminders");
-    await newRef.push().set(reminder.toJson());
+    await _db.child('users/$uid/reminders').push().set(reminder.toJson());
   }
 
   static Future<void> updateReminder(
@@ -39,12 +37,12 @@ class ReminderService {
   ) async {
     final uid = _uid;
     if (uid == null) return;
-    await _db.child("users/$uid/reminders/$id").update(data);
+    await _db.child('users/$uid/reminders/$id').update(data);
   }
 
   static Future<void> deleteReminder(String id) async {
     final uid = _uid;
     if (uid == null) return;
-    await _db.child("users/$uid/reminders/$id").remove();
+    await _db.child('users/$uid/reminders/$id').remove();
   }
 }

@@ -17,30 +17,24 @@ class ReminderScreen extends StatelessWidget {
       ),
       bottomNavigationBar: const AppBottomNav(currentRoute: '/reminders'),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showDialog(context: context, builder: (_) => const AddReminderDialog());
-        },
+        onPressed: () => showDialog(context: context, builder: (_) => const AddReminderDialog()),
         child: const Icon(Icons.add_rounded),
       ),
       body: StreamBuilder<List<ReminderWithId>>(
         stream: ReminderService.getReminders(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final items = snapshot.data ?? [];
-          if (items.isEmpty) {
-            return const _EmptyReminders();
-          }
+          final items = snap.data ?? [];
+          if (items.isEmpty) return const _EmptyReminders();
 
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
             itemCount: items.length,
             separatorBuilder: (_, _) => const SizedBox(height: 14),
-            itemBuilder: (context, index) {
-              return _ReminderCard(item: items[index]);
-            },
+            itemBuilder: (context, index) => _ReminderCard(item: items[index]),
           );
         },
       ),
@@ -55,7 +49,7 @@ class _ReminderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reminder = item.reminder;
+    final r = item.reminder;
     return PremiumPanel(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,46 +61,43 @@ class _ReminderCard extends StatelessWidget {
               color: AppTheme.secondary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Icon(
-              Icons.medication_liquid_rounded,
-              color: AppTheme.secondary,
-            ),
+            child: const Icon(Icons.medication_liquid_rounded, color: AppTheme.secondary),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(reminder.name, style: Theme.of(context).textTheme.titleLarge),
+                Text(r.name, style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 10,
                   runSpacing: 8,
                   children: [
-                    _Pill(icon: Icons.access_time_rounded, text: reminder.time),
-                    _Pill(icon: Icons.inventory_2_rounded, text: 'Slot ${reminder.slot}'),
-                    _Pill(icon: Icons.calendar_month_rounded, text: reminder.days.join(', ')),
+                    _Pill(icon: Icons.access_time_rounded, text: r.time),
+                    _Pill(icon: Icons.inventory_2_rounded, text: 'Slot ${r.slot}'),
+                    _Pill(icon: Icons.calendar_month_rounded, text: r.days.join(', ')),
                   ],
                 ),
-                if (reminder.note != null && reminder.note!.isNotEmpty) ...[
+                if (r.note != null && r.note!.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Text(reminder.note!, style: Theme.of(context).textTheme.bodyMedium),
+                  Text(r.note!, style: Theme.of(context).textTheme.bodyMedium),
                 ],
               ],
             ),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_horiz_rounded),
-            onSelected: (value) async {
-              if (value == 'edit') {
+            onSelected: (v) async {
+              if (v == 'edit') {
                 showDialog(
                   context: context,
-                  builder: (_) => AddReminderDialog(initialReminder: item),
+                  builder: (_) => AddReminderDialog(initial: item),
                 );
                 return;
               }
-              final confirm = await _confirmDelete(context);
-              if (confirm) await ReminderService.deleteReminder(item.id);
+              final ok = await _confirmDelete(context);
+              if (ok) await ReminderService.deleteReminder(item.id);
             },
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'edit', child: Text('Edit')),
@@ -120,22 +111,18 @@ class _ReminderCard extends StatelessWidget {
 
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Delete Reminder?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('No'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Yes', style: TextStyle(color: AppTheme.danger)),
-              ),
-            ],
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Reminder?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes', style: TextStyle(color: AppTheme.danger)),
           ),
-        ) ??
-        false;
+        ],
+      ),
+    ) ?? false;
   }
 }
 

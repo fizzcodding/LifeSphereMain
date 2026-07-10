@@ -12,21 +12,24 @@ class Vital32Screen extends StatefulWidget {
 }
 
 class _Vital32ScreenState extends State<Vital32Screen> {
-  final _healthService = HealthService();
-  final Map<String, TextEditingController> _dietControllers = {
+  final _svc = HealthService();
+  final Map<String, TextEditingController> _dietCtrls = {
     'breakfast': TextEditingController(),
     'lunch': TextEditingController(),
     'dinner': TextEditingController(),
   };
-  bool _isGeneratingAI = false;
+  bool _genAI = false;
 
   @override
   void dispose() {
-    for (final controller in _dietControllers.values) {
-      controller.dispose();
-    }
+    for (final c in _dietCtrls.values) { c.dispose(); }
     super.dispose();
   }
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -37,55 +40,41 @@ class _Vital32ScreenState extends State<Vital32Screen> {
       ),
       bottomNavigationBar: const AppBottomNav(currentRoute: '/vital32'),
       body: StreamBuilder(
-        stream: _healthService.vitalsStream(),
-        builder: (context, snapshot) {
-          final data = _asMap(snapshot.data?.snapshot.value);
-          final steps = _currentValue(data, 'steps');
-          final hydration = _currentValue(data, 'hydration');
-          final hr = _currentValue(data, 'hr');
-          final spo2 = _currentValue(data, 'spo2');
-          final temp = _currentValue(data, 'temp');
-          final tips = _asMap(data['aiSuggestions']);
-          final diet = _asMap(data['diet']);
+        stream: _svc.vitalsStream(),
+        builder: (context, snap) {
+          final data = snap.data?.snapshot.value as Map? ?? {};
+          final steps = _val(data, 'steps');
+          final hr = _val(data, 'hr');
+          final spo2 = _val(data, 'spo2');
+          final temp = _val(data, 'temp').toDouble();
+          final hydration = _val(data, 'hydration');
+          final tips = data['aiSuggestions'] as Map? ?? {};
+          final diet = data['diet'] as Map? ?? {};
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeader(context),
+                _header(context),
                 const SizedBox(height: 18),
-                _buildVitalsPanel(hr, spo2, temp.toDouble()),
+                _vitalsPanel(hr, spo2, temp),
                 const SizedBox(height: 18),
-                _buildTrendChart(hr, spo2, hydration),
+                _trendChart(hr, spo2, hydration),
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    Expanded(
-                      child: _buildStatCard(
-                        'Step Count',
-                        steps.toString(),
-                        Icons.directions_walk_rounded,
-                        AppTheme.primary,
-                      ),
-                    ),
+                    Expanded(child: _statCard('Step Count', steps.toString(), Icons.directions_walk_rounded, AppTheme.primary)),
                     const SizedBox(width: 14),
-                    Expanded(
-                      child: _buildStatCard(
-                        'Hydration',
-                        '$hydration ml',
-                        Icons.water_drop_rounded,
-                        AppTheme.secondary,
-                      ),
-                    ),
+                    Expanded(child: _statCard('Hydration', '$hydration ml', Icons.water_drop_rounded, AppTheme.secondary)),
                   ],
                 ),
                 const SizedBox(height: 18),
-                _buildHydrationControls(hydration),
+                _hydrationControls(hydration),
                 const SizedBox(height: 22),
-                _buildAISuggestions(tips),
+                _aiInsights(tips),
                 const SizedBox(height: 22),
-                _buildDietSection(diet),
+                _dietSection(diet),
               ],
             ),
           );
@@ -94,80 +83,37 @@ class _Vital32ScreenState extends State<Vital32Screen> {
     );
   }
 
-  Map _asMap(Object? value) {
-    if (value is Map) return value;
-    if (value is List) return value.asMap();
-    return {};
-  }
-
-  int _currentValue(Map data, String key) {
-    final value = data[key];
-    if (value is Map && value['currently'] is num) {
-      return (value['currently'] as num).toInt();
+  int _val(Map data, String key) {
+    final v = data[key];
+    if (v is Map && v['currently'] is num) {
+      return (v['currently'] as num).toInt();
     }
     return 0;
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _header(BuildContext context) {
     final now = DateTime.now();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Vital32', style: Theme.of(context).textTheme.displayLarge),
         const SizedBox(height: 4),
-        Text(
-          '${now.day} ${_month(now.month)}',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
+        Text('${now.day} ${_months[now.month - 1]}', style: Theme.of(context).textTheme.bodyMedium),
       ],
     );
   }
 
-  String _month(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return months[month - 1];
-  }
-
-  Widget _buildVitalsPanel(int hr, int spo2, double temp) {
+  Widget _vitalsPanel(int hr, int spo2, double temp) {
     return PremiumPanel(
       child: Row(
         children: [
           SizedBox(
-            width: 138,
-            height: 138,
+            width: 138, height: 138,
             child: Stack(
               children: [
-                _Ring(
-                  progress: hr / 200,
-                  color: AppTheme.danger,
-                  strokeWidth: 12,
-                  radius: 60,
-                ),
-                _Ring(
-                  progress: spo2 / 100,
-                  color: AppTheme.secondary,
-                  strokeWidth: 12,
-                  radius: 45,
-                ),
-                _Ring(
-                  progress: (temp - 30) / 10,
-                  color: AppTheme.primary,
-                  strokeWidth: 12,
-                  radius: 30,
-                ),
+                _Ring(progress: hr / 200, color: AppTheme.danger, strokeWidth: 12, radius: 60),
+                _Ring(progress: spo2 / 100, color: AppTheme.secondary, strokeWidth: 12, radius: 45),
+                _Ring(progress: (temp - 30) / 10, color: AppTheme.primary, strokeWidth: 12, radius: 30),
               ],
             ),
           ),
@@ -176,13 +122,9 @@ class _Vital32ScreenState extends State<Vital32Screen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildRingLabel('Heart Rate', '$hr BPM', AppTheme.danger),
-                _buildRingLabel('SpO2', '$spo2%', AppTheme.secondary),
-                _buildRingLabel(
-                  'Temperature',
-                  '${temp.toStringAsFixed(1)} C',
-                  AppTheme.primary,
-                ),
+                _label('Heart Rate', '$hr BPM', AppTheme.danger),
+                _label('SpO2', '$spo2%', AppTheme.secondary),
+                _label('Temperature', '${temp.toStringAsFixed(1)} C', AppTheme.primary),
               ],
             ),
           ),
@@ -191,27 +133,20 @@ class _Vital32ScreenState extends State<Vital32Screen> {
     );
   }
 
-  Widget _buildRingLabel(String label, String value, Color color) {
+  Widget _label(String label, String value, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          Text(value, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w800)),
         ],
       ),
     );
   }
 
-  Widget _buildTrendChart(int hr, int spo2, int hydration) {
+  Widget _trendChart(int hr, int spo2, int hydration) {
     return PremiumPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,10 +166,7 @@ class _Vital32ScreenState extends State<Vital32Screen> {
           const SizedBox(height: 8),
           Text(
             'Hydration ${hydration.clamp(0, 2500)} / 2500 ml',
-            style: const TextStyle(
-              color: AppTheme.secondary,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(color: AppTheme.secondary, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -242,13 +174,10 @@ class _Vital32ScreenState extends State<Vital32Screen> {
   }
 
   List<double> _trend(int base, int spread) {
-    return List.generate(8, (index) {
-      final wave = math.sin(index * 0.85) * spread;
-      return (base + wave).toDouble();
-    });
+    return List.generate(8, (i) => (base + math.sin(i * 0.85) * spread).toDouble());
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _statCard(String title, String value, IconData icon, Color color) {
     return PremiumPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,7 +192,7 @@ class _Vital32ScreenState extends State<Vital32Screen> {
     );
   }
 
-  Widget _buildHydrationControls(int current) {
+  Widget _hydrationControls(int current) {
     return PremiumPanel(
       child: Row(
         children: [
@@ -273,28 +202,19 @@ class _Vital32ScreenState extends State<Vital32Screen> {
               children: [
                 Text('Hydration Tracker', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 4),
-                Text(
-                  '$current / 2500 ml today',
-                  style: const TextStyle(color: AppTheme.secondary),
-                ),
+                Text('$current / 2500 ml today', style: const TextStyle(color: AppTheme.secondary)),
               ],
             ),
           ),
-          _roundButton(
-            Icons.remove_rounded,
-            () => _healthService.updateHydration(-250),
-          ),
+          _btn(Icons.remove_rounded, () => _svc.updateHydration(-250)),
           const SizedBox(width: 12),
-          _roundButton(
-            Icons.add_rounded,
-            () => _healthService.updateHydration(250),
-          ),
+          _btn(Icons.add_rounded, () => _svc.updateHydration(250)),
         ],
       ),
     );
   }
 
-  Widget _roundButton(IconData icon, VoidCallback onTap) {
+  Widget _btn(IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -310,72 +230,59 @@ class _Vital32ScreenState extends State<Vital32Screen> {
     );
   }
 
-  Widget _buildAISuggestions(Map tips) {
+  Widget _aiInsights(Map tips) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Expanded(
-              child: Text('AI Insights', style: Theme.of(context).textTheme.titleLarge),
-            ),
-            _isGeneratingAI
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+            Expanded(child: Text('AI Insights', style: Theme.of(context).textTheme.titleLarge)),
+            _genAI
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                 : IconButton(
                     icon: const Icon(Icons.refresh_rounded),
                     onPressed: () async {
-                      setState(() => _isGeneratingAI = true);
-                      await _healthService.generateAISuggestions();
-                      if (mounted) setState(() => _isGeneratingAI = false);
+                      setState(() => _genAI = true);
+                      await _svc.generateAISuggestions();
+                      if (mounted) setState(() => _genAI = false);
                     },
                   ),
           ],
         ),
         const SizedBox(height: 10),
         if (tips.isEmpty)
-          PremiumPanel(
-            child: Text(
-              'No insights yet.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          )
+          PremiumPanel(child: Text('No insights yet.', style: Theme.of(context).textTheme.bodyMedium))
         else
-          ...tips.values.map(
-            (tip) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: PremiumPanel(
-                child: Row(
-                  children: [
-                    const Icon(Icons.auto_awesome_rounded, color: AppTheme.secondary),
-                    const SizedBox(width: 14),
-                    Expanded(child: Text(tip.toString())),
-                  ],
-                ),
+          ...tips.values.map((tip) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: PremiumPanel(
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome_rounded, color: AppTheme.secondary),
+                  const SizedBox(width: 14),
+                  Expanded(child: Text(tip.toString())),
+                ],
               ),
             ),
-          ),
+          )),
       ],
     );
   }
 
-  Widget _buildDietSection(Map diet) {
+  Widget _dietSection(Map diet) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Diet Planner', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
-        _buildMealTile('breakfast', Icons.wb_sunny_rounded, diet['breakfast'] ?? []),
-        _buildMealTile('lunch', Icons.sunny, diet['lunch'] ?? []),
-        _buildMealTile('dinner', Icons.nightlight_round, diet['dinner'] ?? []),
+        _mealTile('breakfast', Icons.wb_sunny_rounded, diet['breakfast'] ?? []),
+        _mealTile('lunch', Icons.sunny, diet['lunch'] ?? []),
+        _mealTile('dinner', Icons.nightlight_round, diet['dinner'] ?? []),
       ],
     );
   }
 
-  Widget _buildMealTile(String title, IconData icon, List items) {
+  Widget _mealTile(String title, IconData icon, List items) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: PremiumPanel(
@@ -392,35 +299,30 @@ class _Vital32ScreenState extends State<Vital32Screen> {
                 children: [
                   Expanded(
                     child: TextField(
-                      controller: _dietControllers[title],
-                      decoration: const InputDecoration(
-                        hintText: 'Add food item',
-                        isDense: true,
-                      ),
+                      controller: _dietCtrls[title],
+                      decoration: const InputDecoration(hintText: 'Add food item', isDense: true),
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.add_circle_rounded, color: AppTheme.secondary),
                     onPressed: () {
-                      final controller = _dietControllers[title];
-                      final value = controller?.text.trim();
-                      if (controller == null || value == null || value.isEmpty) return;
-                      _healthService.addDietItem(title, value);
-                      controller.clear();
+                      final ctrl = _dietCtrls[title];
+                      final val = ctrl?.text.trim();
+                      if (ctrl == null || val == null || val.isEmpty) return;
+                      _svc.addDietItem(title, val);
+                      ctrl.clear();
                     },
                   ),
                 ],
               ),
             ),
-            ...items.asMap().entries.map(
-              (entry) => ListTile(
-                title: Text(entry.value.toString()),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger),
-                  onPressed: () => _healthService.removeDietItem(title, entry.key),
-                ),
+            ...items.asMap().entries.map((e) => ListTile(
+              title: Text(e.value.toString()),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger),
+                onPressed: () => _svc.removeDietItem(title, e.key),
               ),
-            ),
+            )),
           ],
         ),
       ),
@@ -446,10 +348,7 @@ class _Ring extends StatelessWidget {
     return Center(
       child: CustomPaint(
         painter: _RingPainter(
-          progress: progress,
-          color: color,
-          strokeWidth: strokeWidth,
-          radius: radius,
+          progress: progress, color: color, strokeWidth: strokeWidth, radius: radius,
         ),
       ),
     );
@@ -472,81 +371,78 @@ class _RingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final trackPaint = Paint()
+    final track = Paint()
       ..color = color.withValues(alpha: 0.12)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth;
-    final progressPaint = Paint()
+    final prog = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawCircle(center, radius, trackPaint);
+    canvas.drawCircle(center, radius, track);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       -math.pi / 2,
       2 * math.pi * progress.clamp(0.0, 1.0),
       false,
-      progressPaint,
+      prog,
     );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant CustomPainter old) => true;
 }
 
 class _LineChartPainter extends CustomPainter {
   final List<double> primaryValues;
   final List<double> secondaryValues;
 
-  _LineChartPainter({
-    required this.primaryValues,
-    required this.secondaryValues,
-  });
+  _LineChartPainter({required this.primaryValues, required this.secondaryValues});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = AppTheme.border
-      ..strokeWidth = 1;
-
+    final grid = Paint()..color = AppTheme.border..strokeWidth = 1;
     for (var i = 0; i < 4; i++) {
       final y = size.height * i / 3;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
     }
 
-    _drawLine(canvas, size, primaryValues, AppTheme.primary);
-    _drawLine(canvas, size, secondaryValues, AppTheme.secondary);
+    _draw(canvas, size, primaryValues, AppTheme.primary);
+    _draw(canvas, size, secondaryValues, AppTheme.secondary);
   }
 
-  void _drawLine(Canvas canvas, Size size, List<double> values, Color color) {
-    final minValue = values.reduce((a, b) => math.min(a, b).toDouble());
-    final maxValue = values.reduce((a, b) => math.max(a, b).toDouble());
-    final range = math.max(1.0, maxValue - minValue).toDouble();
-    final points = List.generate(values.length, (index) {
-      final x = size.width * index / (values.length - 1);
-      final y = size.height - ((values[index] - minValue) / range * size.height);
-      return Offset(x, y);
+  void _draw(Canvas canvas, Size size, List<double> values, Color color) {
+    final min = values.reduce((a, b) => a < b ? a : b);
+    final max = values.reduce((a, b) => a > b ? a : b);
+    final range = (max - min).clamp(1.0, double.infinity);
+
+    final pts = List.generate(values.length, (i) {
+      return Offset(
+        size.width * i / (values.length - 1),
+        size.height - ((values[i] - min) / range * size.height),
+      );
     });
 
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (var i = 0; i < points.length - 1; i++) {
-      final current = points[i];
-      final next = points[i + 1];
-      final control = Offset((current.dx + next.dx) / 2, current.dy);
-      final controlNext = Offset((current.dx + next.dx) / 2, next.dy);
-      path.cubicTo(control.dx, control.dy, controlNext.dx, controlNext.dy, next.dx, next.dy);
+    final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+    for (var i = 0; i < pts.length - 1; i++) {
+      final cur = pts[i], next = pts[i + 1];
+      final c = Offset((cur.dx + next.dx) / 2, cur.dy);
+      final cn = Offset((cur.dx + next.dx) / 2, next.dy);
+      path.cubicTo(c.dx, c.dy, cn.dx, cn.dy, next.dx, next.dy);
     }
 
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-    canvas.drawPath(path, paint);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant CustomPainter old) => true;
 }

@@ -24,24 +24,22 @@ class AppBootstrap extends StatefulWidget {
 }
 
 class _AppBootstrapState extends State<AppBootstrap> {
-  late final Future<dynamic> _init;
+  late final Future<FirebaseApp> _init;
 
   @override
   void initState() {
     super.initState();
-    _init = _initializeSystem();
+    _init = _initSystem();
   }
 
-  Future<dynamic> _initializeSystem() async {
+  Future<FirebaseApp> _initSystem() async {
     final app = await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-
     try {
       await NotificationService().init();
       await NotificationService().requestPermissions();
     } catch (_) {}
-
     return app;
   }
 
@@ -49,16 +47,16 @@ class _AppBootstrapState extends State<AppBootstrap> {
   Widget build(BuildContext context) {
     return FutureBuilder(
       future: _init,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
-          if (snapshot.hasError) {
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.done) {
+          if (snap.hasError) {
             return MaterialApp(
               home: Scaffold(
                 body: Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Firebase initialization failed:\n${snapshot.error}',
+                      'Firebase initialization failed:\n${snap.error}',
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: AppTheme.danger),
                     ),
@@ -69,18 +67,18 @@ class _AppBootstrapState extends State<AppBootstrap> {
           }
           return StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
                 return MaterialApp(
                   home: const SplashScreen(),
                   routes: {
-                    '/login': (context) => const LoginScreen(),
-                    '/dashboard': (context) => const DashboardScreen(),
+                    '/login': (_) => const LoginScreen(),
+                    '/dashboard': (_) => const DashboardScreen(),
                   },
                 );
               }
 
-              final user = snapshot.data;
+              final user = snap.data;
               if (user != null) {
                 ReminderScheduler().start();
               } else {
@@ -88,24 +86,22 @@ class _AppBootstrapState extends State<AppBootstrap> {
               }
 
               return Consumer(
-                builder: (context, ref, child) {
-                  final themeMode = ref.watch(themeProvider);
+                builder: (context, ref, _) {
+                  final theme = ref.watch(themeProvider);
                   return MaterialApp(
                     debugShowCheckedModeBanner: false,
                     title: 'SphereCore',
-                    themeMode: themeMode,
+                    themeMode: theme,
                     theme: AppTheme.lightTheme,
-                    home: user == null
-                        ? const LoginScreen()
-                        : const DashboardScreen(),
+                    home: user == null ? const LoginScreen() : const DashboardScreen(),
                     routes: {
-                      '/login': (context) => const LoginScreen(),
+                      '/login': (_) => const LoginScreen(),
                       '/reminders': (_) => const ReminderScreen(),
-                      '/dashboard': (context) => const DashboardScreen(),
-                      '/profile': (context) => const ProfileScreen(),
-                      '/vital32': (context) => const Vital32Screen(),
-                      '/members': (context) => const MembersScreen(),
-                      '/control': (context) => const ControlScreen(),
+                      '/dashboard': (_) => const DashboardScreen(),
+                      '/profile': (_) => const ProfileScreen(),
+                      '/vital32': (_) => const Vital32Screen(),
+                      '/members': (_) => const MembersScreen(),
+                      '/control': (_) => const ControlScreen(),
                     },
                   );
                 },

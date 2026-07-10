@@ -14,17 +14,17 @@ class AddMemberDialog extends StatefulWidget {
 }
 
 class _AddMemberDialogState extends State<AddMemberDialog> {
-  final _nameController = TextEditingController();
-  String _selectedRole = 'Household';
+  final _nameCtrl = TextEditingController();
+  String _role = 'Household';
   File? _image;
-  bool _isLoading = false;
-  final _membersService = MembersService();
+  bool _loading = false;
+  final _svc = MembersService();
 
-  final List<String> _roles = ['Household', 'Guest', 'Relative'];
+  final _roles = ['Household', 'Guest', 'Relative'];
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _nameCtrl.dispose();
     super.dispose();
   }
 
@@ -39,44 +39,33 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
 
     try {
       final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(
+      final picked = await picker.pickImage(
         source: source,
         maxWidth: 800,
         maxHeight: 800,
         imageQuality: 85,
       );
-
-      if (pickedFile != null) {
-        setState(() {
-          _image = File(pickedFile.path);
-        });
-      }
+      if (picked != null) setState(() => _image = File(picked.path));
     } catch (_) {
       showErrorToast('Failed to pick image.');
     }
   }
 
-  void _showImageSourceActionSheet(BuildContext context) {
+  void _showSourcePicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => SafeArea(
+      builder: (ctx) => SafeArea(
         child: Wrap(
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library),
               title: const Text('Gallery'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickImage(ImageSource.gallery);
-              },
+              onTap: () { Navigator.of(ctx).pop(); _pickImage(ImageSource.gallery); },
             ),
             ListTile(
               leading: const Icon(Icons.photo_camera),
               title: const Text('Camera'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickImage(ImageSource.camera);
-              },
+              onTap: () { Navigator.of(ctx).pop(); _pickImage(ImageSource.camera); },
             ),
           ],
         ),
@@ -84,24 +73,16 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
     );
   }
 
-  Future<void> _saveMember() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      showErrorToast('Please enter a name.');
-      return;
-    }
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) { showErrorToast('Please enter a name.'); return; }
+    if (_image == null) { showErrorToast('Please capture or select an image.'); return; }
 
-    if (_image == null) {
-      showErrorToast('Please capture or select an image.');
-      return;
-    }
-
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
 
     try {
-      final success = await _membersService.enrollMember(name, _image!);
-
-      if (success) {
+      final ok = await _svc.enrollMember(name, _image!);
+      if (ok) {
         showSuccessToast('$name enrolled successfully.');
         if (mounted) Navigator.pop(context, true);
       } else {
@@ -110,7 +91,7 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
     } catch (_) {
       showErrorToast('An error occurred during enrollment.');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -123,7 +104,7 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             GestureDetector(
-              onTap: () => _showImageSourceActionSheet(context),
+              onTap: () => _showSourcePicker(context),
               child: Container(
                 width: 120,
                 height: 120,
@@ -137,23 +118,14 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
                 ),
                 child: _image != null
                     ? ClipOval(
-                        child: Image.file(
-                          _image!,
-                          width: 120,
-                          height: 120,
-                          fit: BoxFit.cover,
-                        ),
+                        child: Image.file(_image!, width: 120, height: 120, fit: BoxFit.cover),
                       )
-                    : Icon(
-                        Icons.add_a_photo_rounded,
-                        size: 40,
-                        color: AppTheme.primary,
-                      ),
+                    : Icon(Icons.add_a_photo_rounded, size: 40, color: AppTheme.primary),
               ),
             ),
             const SizedBox(height: 24),
             TextField(
-              controller: _nameController,
+              controller: _nameCtrl,
               decoration: const InputDecoration(
                 labelText: 'Full Name',
                 prefixIcon: Icon(Icons.person),
@@ -161,17 +133,13 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _selectedRole,
+              initialValue: _role,
               decoration: const InputDecoration(
                 labelText: 'Role',
                 prefixIcon: Icon(Icons.badge),
               ),
-              items: _roles.map((role) {
-                return DropdownMenuItem(value: role, child: Text(role));
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => _selectedRole = val);
-              },
+              items: _roles.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+              onChanged: (v) { if (v != null) setState(() => _role = v); },
             ),
           ],
         ),
@@ -179,21 +147,15 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(
-            'Cancel',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
+          child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: _isLoading ? null : _saveMember,
-          child: _isLoading
+          onPressed: _loading ? null : _save,
+          child: _loading
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.surface,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.surface),
                 )
               : const Text('Save Member'),
         ),

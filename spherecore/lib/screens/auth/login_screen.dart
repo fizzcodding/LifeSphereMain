@@ -12,37 +12,34 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool isLoading = false;
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  bool _loading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    if (email.isEmpty || password.isEmpty) {
+  Future<void> _login() async {
+    final email = _emailCtrl.text.trim();
+    final pass = _passCtrl.text.trim();
+    if (email.isEmpty || pass.isEmpty) {
       showErrorToast('Please enter both email and password.');
       return;
     }
 
-    setState(() => isLoading = true);
+    setState(() => _loading = true);
+    final err = await AuthService.login(email, pass);
+    if (mounted) setState(() => _loading = false);
 
-    final result = await AuthService.login(email, password);
-
-    if (mounted) setState(() => isLoading = false);
-
-    if (result == null) {
+    if (err == null) {
       showSuccessToast('Logged in.');
       if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
     } else {
-      showErrorToast(result);
+      showErrorToast(err);
     }
   }
 
@@ -73,40 +70,33 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text('Sign in to continue.', style: Theme.of(context).textTheme.bodyMedium),
                     const SizedBox(height: 28),
                     TextField(
-                      controller: _emailController,
+                      controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(labelText: 'Email'),
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: _passwordController,
+                      controller: _passCtrl,
                       obscureText: true,
                       decoration: const InputDecoration(labelText: 'Password'),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
-                      onPressed: isLoading ? null : _handleLogin,
-                      child: isLoading
+                      onPressed: _loading ? null : _login,
+                      child: _loading
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
                           : const Text('Login'),
                     ),
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const RegisterScreen(),
-                          ),
-                        );
-                      },
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                      ),
                       child: const Text('Create account'),
                     ),
                   ],

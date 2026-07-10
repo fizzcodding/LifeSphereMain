@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/virtual_pin.dart';
 
-class FirestoreService {
+class DatabaseService {
   static final _db = FirebaseDatabase.instance.ref();
   static final _auth = FirebaseAuth.instance;
 

@@ -14,63 +14,54 @@ class MembersScreen extends StatefulWidget {
 }
 
 class _MembersScreenState extends State<MembersScreen> {
-  final _membersService = MembersService();
-  final _ipController = TextEditingController();
+  final _svc = MembersService();
+  final _ipCtrl = TextEditingController();
   List<Member> _members = [];
-  bool _isLoading = false;
-  bool _isIpSet = false;
+  bool _loading = false;
+  bool _ipSet = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedIp();
+    _loadIp();
   }
 
   @override
   void dispose() {
-    _ipController.dispose();
+    _ipCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadSavedIp() async {
-    final ip = await _membersService.getSavedIp();
+  Future<void> _loadIp() async {
+    final ip = await _svc.getSavedIp();
     if (ip == null || ip.isEmpty) return;
-    setState(() {
-      _ipController.text = ip;
-      _isIpSet = true;
-    });
-    _fetchMembers();
+    setState(() { _ipCtrl.text = ip; _ipSet = true; });
+    _fetch();
   }
 
   Future<void> _saveIp() async {
-    final ip = _ipController.text.trim();
-    if (ip.isEmpty) {
-      showErrorToast('Server IP cannot be empty.');
-      return;
-    }
-    await _membersService.saveIp(ip);
-    setState(() => _isIpSet = true);
+    final ip = _ipCtrl.text.trim();
+    if (ip.isEmpty) { showErrorToast('Server IP cannot be empty.'); return; }
+    await _svc.saveIp(ip);
+    setState(() => _ipSet = true);
     showSuccessToast('Server IP saved.');
-    _fetchMembers();
+    _fetch();
   }
 
-  Future<void> _fetchMembers() async {
-    if (!_isIpSet) return;
-    setState(() => _isLoading = true);
+  Future<void> _fetch() async {
+    if (!_ipSet) return;
+    setState(() => _loading = true);
     try {
-      final members = await _membersService.getMembers();
+      final members = await _svc.getMembers();
       if (mounted) setState(() => _members = members);
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _openAddMember() async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => const AddMemberDialog(),
-    );
-    if (result == true) _fetchMembers();
+  Future<void> _openAdd() async {
+    final result = await showDialog<bool>(context: context, builder: (_) => const AddMemberDialog());
+    if (result == true) _fetch();
   }
 
   @override
@@ -82,8 +73,8 @@ class _MembersScreenState extends State<MembersScreen> {
       ),
       bottomNavigationBar: const AppBottomNav(currentRoute: '/members'),
       floatingActionButton: FloatingActionButton(
-        onPressed: _isIpSet ? _openAddMember : null,
-        backgroundColor: _isIpSet ? AppTheme.primary : AppTheme.muted,
+        onPressed: _ipSet ? _openAdd : null,
+        backgroundColor: _ipSet ? AppTheme.primary : AppTheme.muted,
         child: const Icon(Icons.person_add_alt_1_rounded),
       ),
       body: Column(
@@ -93,11 +84,9 @@ class _MembersScreenState extends State<MembersScreen> {
             child: _buildIpInput(),
           ),
           Expanded(
-            child: _isLoading
+            child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _members.isEmpty
-                    ? _buildEmptyState()
-                    : _buildMembersGrid(),
+                : _members.isEmpty ? _buildEmpty() : _buildGrid(),
           ),
         ],
       ),
@@ -111,31 +100,26 @@ class _MembersScreenState extends State<MembersScreen> {
         children: [
           Expanded(
             child: TextField(
-              controller: _ipController,
+              controller: _ipCtrl,
               decoration: const InputDecoration(
                 labelText: 'Server IP Address',
                 hintText: '192.168.0.105:5000',
                 isDense: true,
               ),
-              onChanged: (_) {
-                if (_isIpSet) setState(() => _isIpSet = false);
-              },
+              onChanged: (_) => setState(() => _ipSet = false),
             ),
           ),
           const SizedBox(width: 12),
           SizedBox(
             width: 88,
-            child: ElevatedButton(
-              onPressed: _saveIp,
-              child: const Text('Save'),
-            ),
+            child: ElevatedButton(onPressed: _saveIp, child: const Text('Save')),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmpty() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -150,7 +134,7 @@ class _MembersScreenState extends State<MembersScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                _isIpSet ? 'No members added yet' : 'Server not configured',
+                _ipSet ? 'No members added yet' : 'Server not configured',
                 style: Theme.of(context).textTheme.titleLarge,
                 textAlign: TextAlign.center,
               ),
@@ -161,7 +145,7 @@ class _MembersScreenState extends State<MembersScreen> {
     );
   }
 
-  Widget _buildMembersGrid() {
+  Widget _buildGrid() {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -172,17 +156,13 @@ class _MembersScreenState extends State<MembersScreen> {
       ),
       itemCount: _members.length,
       itemBuilder: (context, index) {
-        final member = _members[index];
+        final m = _members[index];
         return _MemberCard(
-          member: member,
+          member: m,
           onDelete: () async {
-            final success = await _membersService.removeMember(member.id);
-            if (success) {
-              showSuccessToast('Member removed.');
-              _fetchMembers();
-            } else {
-              showErrorToast('Failed to remove member.');
-            }
+            final ok = await _svc.removeMember(m.id);
+            ok ? showSuccessToast('Member removed.') : showErrorToast('Failed to remove member.');
+            _fetch();
           },
         );
       },
@@ -218,8 +198,7 @@ class _MemberCard extends StatelessWidget {
                     : Image.network(
                         member.imageUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.person_rounded, size: 42),
+                        errorBuilder: (_, _, _) => const Icon(Icons.person_rounded, size: 42),
                       ),
               ),
               const SizedBox(height: 16),
@@ -253,7 +232,7 @@ class _MemberCard extends StatelessWidget {
             right: 0,
             child: IconButton(
               icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger),
-              onPressed: () => _showDeleteConfirm(context),
+              onPressed: () => _confirmDelete(context),
             ),
           ),
         ],
@@ -270,22 +249,16 @@ class _MemberCard extends StatelessWidget {
     };
   }
 
-  void _showDeleteConfirm(BuildContext context) {
+  void _confirmDelete(BuildContext context) {
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Remove Member?'),
         content: Text('Remove ${member.name} from your household?'),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              onDelete();
-            },
+            onPressed: () { Navigator.pop(ctx); onDelete(); },
             child: const Text('Remove', style: TextStyle(color: AppTheme.danger)),
           ),
         ],

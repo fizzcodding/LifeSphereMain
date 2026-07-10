@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 class HealthService {
   static const _geminiKey = String.fromEnvironment('GEMINI_API_KEY');
 
-  final FirebaseDatabase _db = FirebaseDatabase.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final _db = FirebaseDatabase.instance;
+  final _auth = FirebaseAuth.instance;
 
   String? get _uid => _auth.currentUser?.uid;
 
@@ -19,20 +20,13 @@ class HealthService {
     if (_uid == null) return null;
     try {
       final snap = await _db.ref('users/$_uid/profile').get();
-      if (snap.exists) {
-        return Map<String, dynamic>.from(snap.value as Map);
-      }
-      return null;
+      return snap.exists ? Map<String, dynamic>.from(snap.value as Map) : null;
     } catch (_) {
       return null;
     }
   }
 
-  Future<void> updateProfile(
-    String name,
-    String birthDate,
-    String? phonetag,
-  ) async {
+  Future<void> updateProfile(String name, String birthDate, String? phonetag) async {
     if (_uid == null) return;
     await _db.ref('users/$_uid/profile').set({
       'name': name,
@@ -44,15 +38,10 @@ class HealthService {
   Future<void> updateHydration(int delta) async {
     if (_uid == null) return;
     final ref = _db.ref('users/$_uid/vital32/hydration/currently');
-
     final snap = await ref.get();
     final current = snap.exists ? (snap.value as num).toInt() : 0;
-
-    final newValue = (current + delta).clamp(0, 100000);
-
-    await ref.set(newValue);
-    await _db
-        .ref('users/$_uid/vital32/hydration/lastRecorded')
+    await ref.set((current + delta).clamp(0, 100000));
+    await _db.ref('users/$_uid/vital32/hydration/lastRecorded')
         .set(DateTime.now().toIso8601String());
   }
 
@@ -60,11 +49,7 @@ class HealthService {
     if (_uid == null) return;
     final ref = _db.ref('users/$_uid/vital32/diet/$meal');
     final snap = await ref.get();
-
-    final list = snap.exists
-        ? List<String>.from(snap.value as List)
-        : [];
-
+    final list = snap.exists ? List<String>.from(snap.value as List) : [];
     list.add(item);
     await ref.set(list);
   }
@@ -73,23 +58,20 @@ class HealthService {
     if (_uid == null) return;
     final ref = _db.ref('users/$_uid/vital32/diet/$meal');
     final snap = await ref.get();
-
     if (!snap.exists) return;
-
     final list = List<String>.from(snap.value as List);
     if (index < 0 || index >= list.length) return;
-
     list.removeAt(index);
     await ref.set(list);
   }
 
   Future<void> generateAISuggestions() async {
     if (_uid == null || _geminiKey.isEmpty) return;
-    final userRef = _db.ref("users/$_uid");
+    final ref = _db.ref('users/$_uid');
 
     try {
       var age = 0;
-      final birthSnap = await userRef.child("profile/birthDate").get();
+      final birthSnap = await ref.child('profile/birthDate').get();
       if (birthSnap.exists) {
         final birthStr = birthSnap.value as String;
         if (birthStr.isNotEmpty) {
@@ -104,18 +86,17 @@ class HealthService {
       }
 
       Future<int> vital(String key) async {
-        final snap = await userRef.child("vital32/$key/currently").get();
+        final snap = await ref.child('vital32/$key/currently').get();
         return snap.exists ? (snap.value as num).toInt() : 0;
       }
 
-      final steps = await vital("steps");
-      final hydration = await vital("hydration");
-      final hr = await vital("hr");
-      final spo2 = await vital("spo2");
-      final temp = await vital("temp");
+      final steps = await vital('steps');
+      final hydration = await vital('hydration');
+      final hr = await vital('hr');
+      final spo2 = await vital('spo2');
+      final temp = await vital('temp');
 
-      final prompt = """
-You are SphereAI, a precision health intelligence embedded in a caregiving system.
+      final prompt = '''You are SphereAI, a precision health intelligence embedded in a caregiving system.
 
 Analyze these real-time biometrics and return EXACTLY 3 actionable micro-interventions.
 
@@ -138,34 +119,22 @@ RULES:
 - no generic tips like "sleep well" or "eat healthy"
 - no emojis, no bullet symbols, no numbering
 - plain text, one tip per line, nothing else
-- tone: calm, direct, like a PhD doctor texting you
-""";
+- tone: calm, direct, like a PhD doctor texting you''';
 
       final res = await http.post(
-        Uri.parse(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$_geminiKey",
-        ),
-        headers: {"Content-Type": "application/json"},
+        Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$_geminiKey'),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          "contents": [
-            {
-              "role": "user",
-              "parts": [
-                {"text": prompt},
-              ],
-            },
+          'contents': [
+            {'role': 'user', 'parts': [{'text': prompt}]},
           ],
         }),
       );
 
-      if (res.statusCode != 200) {
-        return;
-      }
+      if (res.statusCode != 200) return;
 
       final data = jsonDecode(res.body);
-
-      final text = data["candidates"][0]["content"]["parts"][0]["text"];
-
+      final text = data['candidates'][0]['content']['parts'][0]['text'];
       final tips = text
           .split(RegExp(r'\n|\d\.\s|\*|-'))
           .map((e) => e.trim())
@@ -174,15 +143,14 @@ RULES:
           .toList();
 
       while (tips.length < 3) {
-        tips.add("Keep moving for better health.");
+        tips.add('Keep moving for better health.');
       }
 
-      await userRef.child("vital32/aiSuggestions").set({
-        "0": tips[0],
-        "1": tips[1],
-        "2": tips[2],
+      await ref.child('vital32/aiSuggestions').set({
+        '0': tips[0],
+        '1': tips[1],
+        '2': tips[2],
       });
-
     } catch (_) {}
   }
 }

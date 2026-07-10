@@ -6,9 +6,9 @@ import '../../themes/app_theme.dart';
 import '../../utils/toast.dart';
 
 class AddReminderDialog extends StatefulWidget {
-  final ReminderWithId? initialReminder;
+  final ReminderWithId? initial;
 
-  const AddReminderDialog({super.key, this.initialReminder});
+  const AddReminderDialog({super.key, this.initial});
 
   @override
   State<AddReminderDialog> createState() => _AddReminderDialogState();
@@ -18,160 +18,142 @@ class _AddReminderDialogState extends State<AddReminderDialog> {
   static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   static const _slots = ['1', '2', '3', '4', '5', '6'];
 
-  late final TextEditingController _nameController;
-  late final TextEditingController _noteController;
-  late String _selectedSlot;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _noteCtrl;
+  late String _slot;
   late Set<String> _selectedDays;
-  TimeOfDay? _selectedTime;
-  bool isLoading = false;
+  TimeOfDay? _time;
+  bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    final reminder = widget.initialReminder?.reminder;
-    _nameController = TextEditingController(text: reminder?.name ?? '');
-    _noteController = TextEditingController(text: reminder?.note ?? '');
-    _selectedSlot = reminder?.slot ?? '1';
-    _selectedDays = reminder?.days.toSet() ?? {};
-    _selectedTime = _parseTime(reminder?.time);
+    final r = widget.initial?.reminder;
+    _nameCtrl = TextEditingController(text: r?.name ?? '');
+    _noteCtrl = TextEditingController(text: r?.note ?? '');
+    _slot = r?.slot ?? '1';
+    _selectedDays = r?.days.toSet() ?? {};
+    _time = _parseTime(r?.time);
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _noteController.dispose();
+    _nameCtrl.dispose();
+    _noteCtrl.dispose();
     super.dispose();
   }
 
   TimeOfDay? _parseTime(String? value) {
     if (value == null) return null;
-    final match = RegExp(r'^(\d{1,2}):(\d{2})\s?(AM|PM)$', caseSensitive: false).firstMatch(value);
-    if (match == null) return null;
-    var hour = int.parse(match.group(1)!);
-    final minute = int.parse(match.group(2)!);
-    final period = match.group(3)!.toUpperCase();
-    if (period == 'PM' && hour < 12) hour += 12;
-    if (period == 'AM' && hour == 12) hour = 0;
-    return TimeOfDay(hour: hour, minute: minute);
+    final m = RegExp(r'^(\d{1,2}):(\d{2})\s?(AM|PM)$', caseSensitive: false).firstMatch(value);
+    if (m == null) return null;
+    var h = int.parse(m.group(1)!);
+    final min = int.parse(m.group(2)!);
+    if (m.group(3)!.toUpperCase() == 'PM' && h < 12) h += 12;
+    if (m.group(3)!.toUpperCase() == 'AM' && h == 12) h = 0;
+    return TimeOfDay(hour: h, minute: min);
   }
 
-  Future<void> _selectTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime ?? TimeOfDay.now(),
-    );
-    if (picked != null) setState(() => _selectedTime = picked);
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(context: context, initialTime: _time ?? TimeOfDay.now());
+    if (picked != null) setState(() => _time = picked);
   }
 
-  Future<void> _saveReminder() async {
-    final name = _nameController.text.trim();
-    final note = _noteController.text.trim();
+  String _fmt(TimeOfDay t) {
+    final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    return '${h.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} ${t.period == DayPeriod.am ? 'AM' : 'PM'}';
+  }
 
-    if (name.isEmpty || _selectedTime == null || _selectedDays.isEmpty) {
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty || _time == null || _selectedDays.isEmpty) {
       showErrorToast('Fill name, pick time, and select a day.');
       return;
     }
 
-    setState(() => isLoading = true);
+    setState(() => _loading = true);
 
-    final time = _formatTime(_selectedTime!);
-    final days = _days.where(_selectedDays.contains).toList();
     final data = {
       'name': name,
-      'slot': _selectedSlot,
-      'time': time,
-      'days': days,
-      'note': note.isEmpty ? null : note,
+      'slot': _slot,
+      'time': _fmt(_time!),
+      'days': _days.where(_selectedDays.contains).toList(),
+      if (_noteCtrl.text.trim().isNotEmpty) 'note': _noteCtrl.text.trim(),
     };
 
     try {
-      if (widget.initialReminder == null) {
-        await ReminderService.addReminder(
-          MedicineReminder(
-            name: name,
-            slot: _selectedSlot,
-            time: time,
-            days: days,
-            note: note.isEmpty ? null : note,
-          ),
-        );
+      if (widget.initial == null) {
+        await ReminderService.addReminder(MedicineReminder(
+          name: name,
+          slot: _slot,
+          time: _fmt(_time!),
+          days: _days.where(_selectedDays.contains).toList(),
+          note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+        ));
         showSuccessToast('Reminder added.');
       } else {
-        await ReminderService.updateReminder(widget.initialReminder!.id, data);
+        await ReminderService.updateReminder(widget.initial!.id, data);
         showSuccessToast('Reminder updated.');
       }
       if (mounted) Navigator.pop(context);
     } catch (_) {
       showErrorToast('Failed to save reminder.');
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
-  }
-
-  String _formatTime(TimeOfDay time) {
-    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-    return '${hour.toString().padLeft(2, '0')}:$minute $period';
   }
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.initialReminder != null;
+    final editing = widget.initial != null;
     return AlertDialog(
-      title: Text(isEditing ? 'Edit Reminder' : 'Add Reminder'),
+      title: Text(editing ? 'Edit Reminder' : 'Add Reminder'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(
-              controller: _nameController,
+              controller: _nameCtrl,
               decoration: const InputDecoration(labelText: 'Medicine Name'),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _selectedSlot,
+              initialValue: _slot,
               decoration: const InputDecoration(labelText: 'Slot'),
               items: _slots
-                  .map((slot) => DropdownMenuItem(value: slot, child: Text('Slot $slot')))
+                  .map((s) => DropdownMenuItem(value: s, child: Text('Slot $s')))
                   .toList(),
-              onChanged: (value) {
-                if (value != null) setState(() => _selectedSlot = value);
-              },
+              onChanged: (v) { if (v != null) setState(() => _slot = v); },
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: _selectTime,
+              onPressed: _pickTime,
               icon: const Icon(Icons.access_time_rounded),
-              label: Text(_selectedTime == null ? 'Pick Time' : _selectedTime!.format(context)),
+              label: Text(_time == null ? 'Pick Time' : _time!.format(context)),
             ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: _days.map((day) {
-                final selected = _selectedDays.contains(day);
+                final sel = _selectedDays.contains(day);
                 return FilterChip(
                   label: Text(day),
-                  selected: selected,
+                  selected: sel,
                   selectedColor: AppTheme.secondary.withValues(alpha: 0.18),
                   checkmarkColor: AppTheme.primary,
                   backgroundColor: AppTheme.background,
-                  side: BorderSide(
-                    color: selected ? AppTheme.secondary : AppTheme.border,
-                  ),
-                  onSelected: (value) {
-                    setState(() {
-                      value ? _selectedDays.add(day) : _selectedDays.remove(day);
-                    });
+                  side: BorderSide(color: sel ? AppTheme.secondary : AppTheme.border),
+                  onSelected: (v) {
+                    setState(() => v ? _selectedDays.add(day) : _selectedDays.remove(day));
                   },
                 );
               }).toList(),
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: _noteController,
+              controller: _noteCtrl,
               decoration: const InputDecoration(labelText: 'Note'),
             ),
           ],
@@ -183,17 +165,14 @@ class _AddReminderDialogState extends State<AddReminderDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: isLoading ? null : _saveReminder,
-          child: isLoading
+          onPressed: _loading ? null : _save,
+          child: _loading
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.surface,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.surface),
                 )
-              : Text(isEditing ? 'Update' : 'Create'),
+              : Text(editing ? 'Update' : 'Create'),
         ),
       ],
     );
