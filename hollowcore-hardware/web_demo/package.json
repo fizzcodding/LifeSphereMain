@@ -1,0 +1,18 @@
+{
+  "name": "hollowcore-web-demo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "HollowCore -:- LifeSphere — browser control panel sharing SphereCore's Firebase backend.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^11.3.1"
+  },
+  "devDependencies": {
+    "vite": "^6.0.11"
+  }
+}

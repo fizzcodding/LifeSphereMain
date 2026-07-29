@@ -6,7 +6,6 @@ import '../screens/control/control_screen.dart';
 import '../screens/dashboard/reminder_screen.dart';
 import '../screens/members/member_screen.dart';
 import '../themes/app_theme.dart';
-import '../firebase_options.dart';
 import '../providers/theme_provider.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
