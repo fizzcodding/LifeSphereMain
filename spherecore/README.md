@@ -1,5 +1,7 @@
 # SphereCore
 
+> 📱 **Download the app:** the release APK is built to [`build/app/outputs/apk/release/app-release.apk`](build/app/outputs/apk/release/app-release.apk)
+
 **The companion app of the [LifeSphere](../README.md) ecosystem** — *An AI-Powered Autonomous Caregiving Ecosystem.*
 
 SphereCore is the Flutter mobile/web application that puts the entire LifeSphere ecosystem in the palm of the user's (or guardian's) hand. While LifeSphere is designed to be zero-interaction for the elderly user — *technology responding to biology, not the other way around* — SphereCore is the window into the system for guardians, family members, and the users themselves.
