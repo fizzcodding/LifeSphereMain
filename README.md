@@ -2,23 +2,71 @@
 
 **Health · Safety · Automation · Care**
 
-*An AI-Powered Autonomous Caregiving Ecosystem*
-**Team Fälschen** — Lead Researcher: Faiyaz Bin Iqbal
-*"Forged. Wired. Perfected"*
+> *An AI-Powered Autonomous Caregiving Ecosystem*
 
-LifeSphere is five subsystems running off one shared biological state. Instead of five separate gadgets that each do their own thing, everything reads and writes to the same live picture of the user's medical, physical, emotional, and environmental status — and reacts to it without anyone touching a phone.
+**Research paper:** [`An AI- Powered Autonomous Caregiving Ecosystem.pdf`](./An%20AI-%20Powered%20Autonomous%20Caregiving%20Ecosystem.pdf)
+**Live web demo:** <https://spherecore-lite.vercel.app> — the deployed web demo; switch between App Mode and Result Mode in the header
+**Android APK:** [app-release.apk](./spherecore/build/app/outputs/apk/release/app-release.apk)
 
-Full technical writeup and build documentation: [`An AI- Powered Autonomous Caregiving Ecosystem.pdf`](./An%20AI-%20Powered%20Autonomous%20Caregiving%20Ecosystem.pdf)
+What's built and working right now is SphereCore, in two forms. The Flutter companion app is the primary one, and the web demo in `hollowcore-hardware/web_demo/` is its browser counterpart with two modes: **App Mode** is a web reimplementation of SphereCore's Firebase-backed screens, so it's the same app, not a separate tool — and **Result Mode** is a read-only live mirror of HollowCore's state, updating in real time as control actions land from SphereCore (mobile or App Mode). Everything runs on the one Firebase Realtime Database backend, which is what makes a toggle in one surface show up in the others. LifeSphere as a whole is the larger goal: an autonomous caregiving ecosystem of five subsystems sharing one biological state, monitoring the user across four dimensions (medical, physical, emotional, environmental) and responding without explicit input. The whole point is that the user never has to touch a screen or say a command — the system watches their biology and reacts to that instead. The remaining subsystems are documented and scaffolded but not yet migrated in (see [Project Status](#project-status)).
 
----
+## Contents
 
-## Why I built this
+- [Local Development Setup](#local-development-setup)
+- [SphereCore](#spherecore)
+- [Why LifeSphere?](#why-lifesphere)
+- [The Five Subsystems](#the-five-subsystems)
+- [System Architecture](#system-architecture)
+- [AI Model Pipeline](#ai-model-pipeline)
+- [Key Features](#key-features)
+- [Bill of Materials](#bill-of-materials)
+- [Repository Layout](#repository-layout)
+- [Project Status](#project-status)
 
-Bangladesh has over 15 million elderly citizens, and most of them are home alone all day while their families work. That's the actual starting point for this project — not a hypothetical user persona, an observation about how care actually breaks down here. Missed medication, falls with nobody around to notice, slow emotional decline that nobody catches until it's a crisis. All of that is preventable if something is actually watching, continuously, without needing the person to remember to check in with a device.
+## Local Development Setup
 
-Most smart health devices work in isolation — a watch tracks heart rate, a speaker sets reminders, a camera records footage, and none of them talk to each other. LifeSphere's whole premise is that tying these into one shared state produces better outcomes than any of them running solo. If Vital32 picks up a cortisol spike, SphereAI shifts its tone, HollowCore dims the lighting, and HollowRover is already staging a de-escalation routine — automatically, same tick.
+Here's how to get SphereCore running locally. Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install) (Dart SDK `^3.10.8` per `pubspec.yaml`).
 
----
+```bash
+git clone https://github.com/fizzcodding/LifeSphereMain.git
+cd LifeSphereMain
+```
+
+```bash
+cd spherecore
+flutter pub get
+flutter run                      # picks a connected device / emulator
+flutter build apk --release      # Android release build
+```
+
+Firebase is the backend. The repo ships with `lib/firebase_options.dart` for the `hollow-core` project; to point the app at your own Firebase project, run `flutterfire configure` and set up a Realtime Database following the LifeSphere schema (see Section 7 of the [research PDF](./An%20AI-%20Powered%20Autonomous%20Caregiving%20Ecosystem.pdf)). Note that the camera view (`ControlScreen`) and member management (`MembersScreen`) talk to hardware over the local network — an ESP32-CAM websocket on port 81 and an HTTP endpoint — so those screens won't do anything useful without the physical hardware on the same LAN.
+
+### HollowCore web demo
+
+The web demo runs locally too (Vite + Firebase JS SDK, needs Node.js and npm). It signs in against the same Firebase project as the app, so an account registered on mobile works here directly:
+
+```bash
+cd hollowcore-hardware/web_demo
+cp .env.example .env     # Firebase web config; values mirror spherecore/lib/firebase_options.dart
+npm install
+npm run dev              # dev server on http://localhost:5180
+```
+
+Once it's up you'll see a mode switch in the header. **App Mode** is a read/write web version of SphereCore's Firebase-backed screens (Devices, Vital32, Reminders, Profile) — writes go to the same database paths the mobile app uses, so toggling a device here drives real hardware. **Result Mode** is a read-only mirror: toggle something from the mobile app and the corresponding tile flashes and logs the change within milliseconds, nothing polled or simulated. More detail (data model, which SphereCore screens are deliberately not reimplemented and why) in [`hollowcore-hardware/web_demo/README.md`](./hollowcore-hardware/web_demo/README.md).
+
+## SphereCore
+
+Since the elderly user is meant to never touch a screen, the app is the window in for guardians and family members instead. It streams the shared biological state object from Firebase Realtime Database into a live dashboard (heart rate, SpO₂, skin temperature, HRV, anomaly score, emotional state, subsystem statuses), manages medication schedules produced by the prescription OCR pipeline before HollowRover starts delivery, and controls HollowCore appliances and ecosystem modes such as Absence Mode. Guardians can add dependent members, define monitoring instructions and receive alerts for falls, intrusions, anomalies, and digital-safety events. The Flutter app builds for Android, iOS, web, and desktop, with Android as the primary target; the web demo's App Mode covers its Firebase-backed screens in the browser.
+
+Full details, screens, and project structure: [`spherecore/README.md`](./spherecore/README.md)
+
+## Why LifeSphere?
+
+Bangladesh has over 15 million elderly citizens, most of whom stay home alone while family members work full-time. Every day people forget critical medication, fall with nobody nearby, and deteriorate physically and emotionally until it turns life-threatening.
+
+**Hypothesis:** an integrated, bioresponsive caregiving ecosystem produces better outcomes than any combination of single-function devices.
+
+Existing smart devices work in silos, a smartwatch tracks heart rate, a smart speaker sets reminders, a camera records video, and none of them talk to each other. LifeSphere ties everything to a single biological state backbone: when Vital32 detects a cortisol spike, SphereAI adjusts its tone, HollowCore changes the lighting, and HollowRover prepares a stress-relief protocol, all automatically.
 
 ## The Five Subsystems
 
@@ -30,32 +78,33 @@ Most smart health devices work in isolation — a watch tracks heart rate, a spe
 | **EntryGuard** | 24/7 intrusion, fire, and gas detection at all entry points | PIR, MQ-2 gas, KY-026 fire, ESP32 nodes | DeepFace recognition, threat classification | [`entryguard/`](./entryguard) |
 | **HollowCore** | Biology-responsive home & financial automation | Wi-Fi relay modules, MQTT broker, ESP32 | Biomarker-to-environment mapping, anomaly detection | [`hollowcore-hardware/`](./hollowcore-hardware) |
 
-Companion mobile/web app: [`spherecore/`](./spherecore) (Flutter).
+### Vital32 — The Sensing Layer
 
-### Vital32 — the sensing layer
-This is the wearable, and the goal was to make it something you forget you're wearing. Sixteen sensors on one board: ECG, IR skin temp, accel/gyro for fall and tremor detection, bioelectrical impedance for hydration, GSR for sympathetic nervous activity, and near-infrared for tissue perfusion. The onboard pipeline is trained to catch immune activation and pre-seizure signatures before symptoms show — those detection windows are from my model's training/validation runs on the sensor data, documented in the full build PDF, not a clinical claim.
+A wearable the user forgets they're wearing. Its 16-sensor array captures ECG waveforms, IR skin temperature, accelerometer/gyroscope data (fall and tremor detection), bioelectrical impedance (hydration), galvanic skin response (sympathetic nervous activity), and near-infrared tissue perfusion (wound healing). The onboard AI pipeline is designed to flag immune activation 24–48 hours before symptoms appear and estimate pre-seizure probability 30 minutes before onset.
 
-### HollowRover — the physical response unit
-Runs ROS2 Humble on a D-Robotics RDK X5. SLAM for floor mapping, UWB for positioning down to about 10cm. It handles medication dispensing, fall response, pre-seizure cushioning, and cortisol de-escalation on its own — no human has to trigger any of it. The 6-DOF arm can pick up dropped objects and hand things to the user. On the security side it's strictly passive-barrier: it can block, it does not restrain, and anything beyond that needs a human to authorize it. I was deliberate about that line — I didn't want to build something that could physically restrain a person, full stop.
+### HollowRover — The Physical Response Unit
 
-### SphereAI — the emotional intelligence layer
-Three-stream fusion: NLP sentiment, vocal prosody, and live Vital32 biomarkers, combined through a dynamically weighted meta-classifier. This is what's doing early cognitive decline detection and tracking emotional patterns over time. It also has an Islamic integration layer built in — Salah reminders, stress-triggered Adhkar, and a Ramadan mode that restructures the medication and hydration schedule around the fast. This part wasn't an afterthought; it's built for how the actual target users live.
+Runs ROS2 Humble on a D-Robotics RDK X5, with SLAM floor mapping and UWB positioning targeting 10 cm accuracy. It executes biomarker-triggered protocols on its own: medication dispensing, fall response dispatch, pre-seizure cushioning, and cortisol-spike deescalation. The 6-DOF arm picks up dropped objects and hands items to the user. As a security deterrent it is passive-barrier only. No contact, no restraint, and any escalation requires human authorization.
 
-### EntryGuard — perimeter security
-ESP32 nodes at every entry point running PIR, ultrasonic, fire, and gas sensing, plus face recognition against registered profiles. Arms itself, only alerts on things that are actually a threat instead of every motion trigger.
+### SphereAI — The Emotional Intelligence
 
-### HollowCore — biology-responsive automation
-Maps the current physiological/emotional state straight to lighting, thermal control, appliances, and digital safety settings over MQTT. Stressed → lights come down. Cold → AC adjusts. It also runs an Isolation Forest over spending patterns for financial anomaly detection, with biometric multi-factor auth on flagged transactions.
+A TriAgent architecture: NLP sentiment analysis, vocal prosody extraction, and live Vital32 biomarker feeds, fused by a dynamically weighted meta-classifier. This supports early cognitive decline detection and longitudinal emotional modeling. It also includes an Islamic integration framework: Salah reminders, stress-triggered Adhkar, and a Ramadan mode that restructures medication and hydration around fasting.
 
----
+### EntryGuard — Perimeter Security
+
+Multi-sensor ESP32 nodes (PIR, ultrasonic, fire, gas) at every entry point, with face recognition checked against registered profiles. It arms itself and only alerts on genuine threats.
+
+### HollowCore — Biology-Responsive Automation
+
+Maps physiological and emotional state directly to lighting, thermal, appliance, and digital safety outputs over Wi-Fi + MQTT. Stressed → lights dim. Cold → AC adjusts. The design also covers financial anomaly detection (Isolation Forest on spending habits) with multi-factor biometric transaction authorization.
 
 ## System Architecture
 
-- **Shared Biological State Object** — one continuously updated JSON document on Firebase Realtime Database. Vital32 writes to it, every other subsystem subscribes. Target latency is 150ms end to end.
-- **Two-channel comms** — Firebase listeners over cloud for the main state sync, direct MQTT over local Wi-Fi as the fast path, a 115200-baud serial bridge for sub-10ms motor commands, and SIM800L GSM as fallback when Wi-Fi drops.
-- **Multi-timescale inference** — short-cycle (30s) for acute anomalies, medium-cycle (15min) for emotional/cortisol modeling, long-cycle (24h) for the biological age clock and circadian tracking.
-- **Fault tolerance** — 5000mAh backup battery, 24h of local SD vital storage, HollowRover can act as a local hotspot during an outage, independent watchdog timers on all five nodes.
-- **Security** — TLS in transit, face profiles stay local and never get uploaded anywhere, human authorization required before any defensive action, and sensor readings get checked for physical plausibility before they're trusted.
+- **Shared Biological State Object** — a continuously updated JSON document on Firebase Realtime Database, the ecosystem's central nervous system. Vital32 writes, everything else subscribes (target latency: 150 ms).
+- **Two-channel communication** — cloud-mediated Firebase listeners plus direct MQTT over local Wi-Fi; a 115200-baud serial bridge for sub-10ms motor commands; GSM (SIM800L) fallback during Wi-Fi outages.
+- **Multi-timescale inference** — short-cycle (30 s) acute anomaly detection, medium-cycle (15 m) emotional/cortisol models, long-cycle (24 h) biological age clock and circadian modeling.
+- **Fault tolerance** — 5000 mAh backup battery, 24 h local SD vital storage, HollowRover doubles as a local hotspot during outages, independent watchdog timers on all five nodes.
+- **Security** — TLS in transit, face profiles stored locally (never uploaded), mandatory human authorization before any defensive action, physical-plausibility validation of all sensor readings.
 
 ## AI Model Pipeline
 
@@ -68,13 +117,13 @@ Maps the current physiological/emotional state straight to lighting, thermal con
 | Biological Age Clock | Ensemble (RF + XGBoost) | Age in years | Daily update |
 | Cognitive Tracker | Statistical drift (CUSUM) | Deviation score | 2-sigma |
 
-All models train offline and run on-device as TFLite. None of them ship with a generic population baseline — each one calibrates against the specific user's own data over the first 30 days, because "normal" vitals vary enough person to person that a population average isn't that useful for anomaly detection at the individual level.
+All models are trained offline and run on-device as TensorFlow Lite. They learn the user's own biological baseline over the first 30 days instead of comparing against a generic population.
 
 ## Key Features
 
-- **Prescription OCR** — photograph a prescription once, OCR + LLM parsing extracts the schedule and syncs it directly to HollowRover's dispenser. Pressure sensors in the dispenser log actual adherence, not just whether a reminder fired.
-- **Absence Mode** — runs the household while nobody's home: waters plants, checks appliances, patrols, goes full-active on security, sends daily status photos.
-- **Remote Guardian** — family members can configure monitoring for a dependent relative remotely, including content filtering, screen time limits, and distress-pattern alerts.
+- **Prescription OCR** — photograph a prescription once; OCR + LLM parsing builds the full medication schedule and syncs it to HollowRover's dispenser, with pressure-sensor adherence logging.
+- **Absence Mode** — runs the household while the occupant is away: plant watering, appliance checks, patrols, full-active security, and daily photo/status reports.
+- **Remote Guardian** — guardians configure monitoring for dependent family members remotely, including AI-powered digital safety (network-level content filtering, smart screen time, distress-pattern alerts).
 
 ## Bill of Materials
 
@@ -91,24 +140,22 @@ All models train offline and run on-device as TFLite. None of them ship with a g
 
 ```
 LifeSphereMain/
-├── vital32/                  # ESP32 biosensing wearable firmware
-├── hollowrover/              # ROS2 autonomous rover (SLAM, Nav2, arm control)
+├── vital32/                  # ESP32 biosensing wearable (firmware, TFLite models, web demo)
+├── hollowrover/              # ROS2 rover workspace, dispenser + ESP32 peripheral sketches
 ├── sphereai/                 # TriAgent emotional intelligence (Python)
-├── entryguard/               # ESP32 perimeter security node firmware
-├── hollowcore-hardware/      # Biology-responsive automation (ESP32 + MQTT)
+├── entryguard/               # ESP32 perimeter security nodes + face recognition API
+├── hollowcore-hardware/      # ESP32 relay firmware, automation logic, web control panel
 ├── spherecore/               # Flutter companion app (dashboard, reminders, control)
 ├── MedicineDispenser.FCStd   # FreeCAD model of the medication dispenser
 ├── ResearchPaper.latex       # Research paper source
 └── An AI- Powered Autonomous Caregiving Ecosystem.pdf   # Full build document
 ```
 
-## Team Fälschen
+## Project Status
 
-**Faiyaz Bin Iqbal** — Lead Researcher & Sole Engineer
-Birshreshtha Munshi Abdur Rouf Public College
+This is an active competition-stage project, not a finished product. Current state of the code, honestly:
 
-Built the entire technical scope solo: subsystem architecture, biosensor integration, the trimodal LLM pipeline, ML model training, ROS2 robotics and kinematics, PCB design, computer vision, the Firebase real-time backend, and the autonomous medication dispenser mechanism and control logic.
-
----
-
-Elderly isolation and inadequate home care are things I've seen play out in real households here, not an abstract problem statement. LifeSphere is my attempt at doing something about it — connecting what's actually happening in someone's body to something that can physically respond, before it turns into an emergency.
+- **Working end to end:** SphereCore in both its forms (Flutter app and the web demo's App Mode / Result Mode), plus the HollowCore ESP32 relay firmware. All of it reads and writes the same Realtime Database, so an appliance toggled in any one surface moves real hardware and shows up in the others.
+- **Scaffolded:** the source trees for Vital32, HollowRover, SphereAI, and EntryGuard exist with their intended file layout, but most files are placeholders pending migration of the working code. The hardware builds, sensor integrations, and model designs for these subsystems are documented in the research PDF.
+- The performance figures quoted above (150 ms sync latency, 10 cm UWB accuracy, pre-symptom detection windows) are design targets and prototype measurements from the research document, not guarantees of the code in this repo.
+- The release APK linked at the top of this page lives under `spherecore/build/`, which is a build-output directory; rebuild with `flutter build apk --release` if it's absent from your checkout.
