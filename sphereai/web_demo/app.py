@@ -1,0 +1,170 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from flask import Flask, request, jsonify, session
+from agents.language_agent import LanguageAgent
+from agents.biology_agent import BiologyAgent, mock_vitals
+from agents.voice_agent import VoiceAgent, mock_voice
+from agents.response_agent import ResponseAgent
+from agents.emotional_agent import EmotionalAgent
+from fusion.emotional_fusion import EmotionalFusion
+from core.spherecore_client import SphereCoreClient
+
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+
+lang_agent = LanguageAgent()
+bio_agent = BiologyAgent()
+voice_agent = VoiceAgent()
+emotional_agent = EmotionalAgent()
+fusion = EmotionalFusion()
+response_agent = ResponseAgent()
+
+_clients: dict[str, SphereCoreClient] = {}
+
+
+def _get_client(session_id: str) -> SphereCoreClient:
+    if session_id not in _clients:
+        _clients[session_id] = SphereCoreClient()
+    return _clients[session_id]
+
+
+@app.route("/")
+def index():
+    with open(os.path.join(os.path.dirname(__file__), "index.html")) as f:
+        return f.read()
+
+
+_ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+
+
+def _save_credentials(email: str, password: str):
+    try:
+        with open(_ENV_PATH, "r") as f:
+            lines = f.readlines()
+        keys = {"FIREBASE_EMAIL": email, "FIREBASE_PASSWORD": password}
+        updated = {k: False for k in keys}
+        new_lines = []
+        for line in lines:
+            key = line.split("=")[0].strip()
+            if key in keys:
+                new_lines.append(f"{key}={keys[key]}\n")
+                updated[key] = True
+            else:
+                new_lines.append(line)
+        for key, value in keys.items():
+            if not updated[key]:
+                new_lines.append(f"{key}={value}\n")
+        with open(_ENV_PATH, "w") as f:
+            f.writelines(new_lines)
+    except Exception:
+        pass
+
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.json
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
+    if not email or not password:
+        return jsonify({"ok": False, "error": "Email and password required"}), 400
+
+    sid = session.get("id") or os.urandom(16).hex()
+    session["id"] = sid
+    client = _get_client(sid)
+    try:
+        client.authenticate(email, password)
+        _save_credentials(email, password)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 401
+
+
+@app.route("/api/skip_login", methods=["POST"])
+def skip_login():
+    sid = os.urandom(16).hex()
+    session["id"] = sid
+    _clients[sid] = SphereCoreClient()
+    return jsonify({"ok": True, "mode": "mock"})
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    data = request.json
+    msg = (data.get("message") or "").strip()
+    if not msg:
+        return jsonify({"error": "Empty message"}), 400
+
+    sid = session.get("id")
+    client = _get_client(sid) if sid else SphereCoreClient()
+    firebase_ready = client._uid is not None
+
+    try:
+        vitals = client.get_vitals() if firebase_ready else mock_vitals()
+        voice_result = mock_voice()
+        lang_result = lang_agent.analyze(msg)
+        bio_result = bio_agent.analyze(vitals, source="vital32_live" if firebase_ready else "mock")
+        fused = fusion.fuse(lang_result, bio_result, voice_result)
+        emotional_state = emotional_agent.interpret(fused)
+        response_result = response_agent.generate(lang_result, emotional_state)
+    except Exception as e:
+        return jsonify({"error": f"SphereAI unavailable: {e}"}), 503
+
+    action_status = None
+    if response_result.action and firebase_ready:
+        intent = response_result.action.get("intent")
+        if intent == "medication_reminder":
+            entities = lang_result.entities
+            name = entities.get("medication") or entities.get("medicine") or "Medication"
+            time_str = entities.get("time", "08:00")
+            slot = _infer_slot(time_str)
+            days = entities.get("days") or ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            ok = client.add_reminder(name=name, slot=slot, time=time_str, days=days)
+            action_status = "Reminder saved to Firebase." if ok else "Failed to save reminder."
+
+    return jsonify({
+        "reply": response_result.reply,
+        "intent": lang_result.intent,
+        "emotion": lang_result.emotion,
+        "confidence": round(lang_result.confidence, 2),
+        "emotional_context": lang_result.emotional_context,
+        "emotional_state": {
+            "label": emotional_state.label,
+            "arousal": emotional_state.arousal,
+            "valence": emotional_state.valence,
+            "convergence": emotional_state.convergence,
+            "confidence": emotional_state.confidence,
+            "needs_support": emotional_state.needs_support,
+            "alert_level": emotional_state.alert_level,
+        },
+        "biology": {
+            "heart_rate": bio_result.vitals.heart_rate,
+            "spo2": bio_result.vitals.spo2,
+            "temperature": bio_result.vitals.skin_temperature,
+            "activity_level": bio_result.activity_level,
+            "stress_indicators": bio_result.stress_indicators,
+            "heart_rate_elevated": bio_result.heart_rate_elevated,
+            "spo2_low": bio_result.spo2_low,
+            "source": bio_result.source,
+        },
+        "action": response_result.action,
+        "action_status": action_status,
+    })
+
+
+def _infer_slot(time_str: str) -> str:
+    try:
+        hour = int(time_str.split(":")[0])
+        if hour < 12:
+            return "morning"
+        elif hour < 17:
+            return "afternoon"
+        else:
+            return "evening"
+    except Exception:
+        return "morning"
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5050)

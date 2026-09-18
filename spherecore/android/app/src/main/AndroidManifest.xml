@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required by the prescription scan feature (image_picker camera flow). -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <application
         android:label="LifeSphere"
         android:name="${applicationName}"

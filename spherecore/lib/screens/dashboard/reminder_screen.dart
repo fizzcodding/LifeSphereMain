@@ -4,6 +4,7 @@ import '../../services/reminder_service.dart';
 import '../../themes/app_theme.dart';
 import '../../widgets/sidebar.dart';
 import 'add_reminder_dialog.dart';
+import 'scan_prescription_screen.dart';
 
 class ReminderScreen extends StatelessWidget {
   const ReminderScreen({super.key});
@@ -17,7 +18,7 @@ class ReminderScreen extends StatelessWidget {
       ),
       bottomNavigationBar: const AppBottomNav(currentRoute: '/reminders'),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showDialog(context: context, builder: (_) => const AddReminderDialog()),
+        onPressed: () => _showAddOptions(context),
         child: const Icon(Icons.add_rounded),
       ),
       body: StreamBuilder<List<ReminderWithId>>(
@@ -40,6 +41,73 @@ class ReminderScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Two paths into the same reminder system: manual entry and prescription
+/// scan. Both produce the same MedicineReminder data.
+void _showAddOptions(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AppTheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Add Medication', style: Theme.of(ctx).textTheme.titleMedium),
+            const SizedBox(height: 14),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppTheme.border),
+              ),
+              leading: const Icon(Icons.document_scanner_rounded,
+                  color: AppTheme.secondary),
+              title: const Text('Scan Prescription'),
+              subtitle: const Text(
+                'Photograph a prescription and review before saving',
+                style: TextStyle(fontSize: 12.5),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const ScanPrescriptionScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppTheme.border),
+              ),
+              leading: const Icon(Icons.edit_note_rounded,
+                  color: AppTheme.secondary),
+              title: const Text('Enter Manually'),
+              subtitle: const Text(
+                'Type the medicine details yourself',
+                style: TextStyle(fontSize: 12.5),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (_) => const AddReminderDialog(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _ReminderCard extends StatelessWidget {

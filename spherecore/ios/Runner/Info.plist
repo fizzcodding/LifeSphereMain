@@ -41,6 +41,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>LifeSphere uses the camera to scan prescriptions and create medication reminders.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LifeSphere uses your photo library to upload a prescription photo for scanning.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

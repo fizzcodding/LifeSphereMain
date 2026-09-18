@@ -1,0 +1,21 @@
+
+## Kiro
+
+That's a copy-paste indentation issue from the terminal. Run it as a file instead:
+
+## User
+
+hey?
+
+## User
+
+hey
+
+## Kiro
+
+Transform any idea into fully working code. What do you want to build today?
+
+## User
+
+hey
+(END)
