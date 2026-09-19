@@ -10,7 +10,7 @@ from core.spherecore_client import SphereCoreClient
 
 print(r"""
 ███████╗██████╗ ██╗  ██╗███████╗██████╗ ███████╗ █████╗ ██████╗
-██╔════╝██╔══██╗██║  ██║██╔════╝██╔══██╗██╔════╝██╔══██╗  ██║
+██╔════╝██╔══██╗██║  ██║██╔════╝██╔══██╗██╔════╝██╔══██╗  ██╔═╝
 ███████╗██████╔╝███████║█████╗  ██████╔╝█████╗  ███████║  ██║
 ╚════██║██╔═══╝ ██╔══██║██╔══╝  ██╔══██╗██╔══╝  ██╔══██║  ██║
 ███████║██║     ██║  ██║███████╗██║  ██║███████╗██║  ██║██████╗
@@ -71,11 +71,13 @@ def _try_login(email: str, password: str, save: bool = False) -> bool:
         return False
 
 
-_env_email = os.getenv("FIREBASE_EMAIL")
-_env_password = os.getenv("FIREBASE_PASSWORD")
+# Read credentials live (not cached in module-level globals) so that .env
+# edits between process restarts are always picked up.
+_startup_email = os.getenv("FIREBASE_EMAIL")
+_startup_password = os.getenv("FIREBASE_PASSWORD")
 
-if _env_email and _env_password and not _env_email.startswith("your@"):
-    if _try_login(_env_email, _env_password, save=False):
+if _startup_email and _startup_password and not _startup_email.startswith("your@"):
+    if _try_login(_startup_email, _startup_password, save=False):
         print("[SphereCore] Connected to Firebase.\n")
     else:
         print("[SphereCore] Running in mock mode.\n")
@@ -101,10 +103,40 @@ def _get_vitals():
     return mock_vitals()
 
 
+def _format_reminders(reminders: list) -> str:
+    if not reminders:
+        return "You don't have any reminders set right now."
+    lines = []
+    for r in reminders:
+        name = r.get("name", "Unknown")
+        time_str = r.get("time", "")
+        slot = r.get("slot", "")
+        days = r.get("days", [])
+        note = r.get("note", "")
+        day_str = ", ".join(days) if days else "every day"
+        line = f"  • {name} at {time_str} ({slot}) — {day_str}"
+        if note:
+            line += f" [{note}]"
+        lines.append(line)
+    return "Here are your reminders:\n" + "\n".join(lines)
+
+
 def _handle_action(action, lang_result):
-    if not action or not _firebase_ready:
+    if not action:
         return
     intent = action.get("intent")
+    if intent == "list_reminders":
+        if _firebase_ready:
+            try:
+                reminders = spherecore.get_reminders()
+                print("\n" + _format_reminders(reminders) + "\n")
+            except Exception as e:
+                print(f"\n[SphereCore] Could not fetch reminders: {e}\n")
+        else:
+            print("\n[SphereCore] Not connected to Firebase — no reminders available in mock mode.\n")
+        return
+    if not _firebase_ready:
+        return
     if intent == "medication_reminder":
         entities = lang_result.entities
         name = entities.get("medication") or entities.get("medicine") or "Medication"

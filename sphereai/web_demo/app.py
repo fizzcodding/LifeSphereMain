@@ -21,13 +21,27 @@ emotional_agent = EmotionalAgent()
 fusion = EmotionalFusion()
 response_agent = ResponseAgent()
 
+# Clients are cached per session for the lifetime of the process, including
+# their _token/_uid. Tradeoff: SphereCoreClient reads credentials live from
+# .env at authenticate() time, but a cached client keeps the token/uid from
+# its last successful login — .env edits do NOT propagate into it, and
+# Firebase idTokens expire (~1h) while _ensure_auth() only re-authenticates
+# when _token is unset. Call invalidate_client() to force a fresh client.
 _clients: dict[str, SphereCoreClient] = {}
+_client_emails: dict[str, str | None] = {}  # email each client last authenticated with
 
 
 def _get_client(session_id: str) -> SphereCoreClient:
     if session_id not in _clients:
         _clients[session_id] = SphereCoreClient()
+        _client_emails[session_id] = None
     return _clients[session_id]
+
+
+def invalidate_client(session_id: str) -> None:
+    """Drop a cached client so the next request creates a fresh one."""
+    _clients.pop(session_id, None)
+    _client_emails.pop(session_id, None)
 
 
 @app.route("/")
@@ -72,9 +86,14 @@ def login():
 
     sid = session.get("id") or os.urandom(16).hex()
     session["id"] = sid
+    # Re-authenticating overwrites _token/_uid, but if the account changed,
+    # start from a clean client so no state from the old account lingers.
+    if _client_emails.get(sid) not in (None, email):
+        invalidate_client(sid)
     client = _get_client(sid)
     try:
         client.authenticate(email, password)
+        _client_emails[sid] = email
         _save_credentials(email, password)
         return jsonify({"ok": True})
     except Exception as e:
@@ -86,6 +105,7 @@ def skip_login():
     sid = os.urandom(16).hex()
     session["id"] = sid
     _clients[sid] = SphereCoreClient()
+    _client_emails[sid] = None
     return jsonify({"ok": True, "mode": "mock"})
 
 

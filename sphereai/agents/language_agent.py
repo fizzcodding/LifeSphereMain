@@ -19,7 +19,7 @@ class LanguageAgent:
         prompt = f"""Analyze this message from an elderly care app user. Return JSON only.
 
 Fields:
-- intent: one of emotional_support, get_vitals, medication_reminder, navigate, greeting, general_query, unknown
+- intent: one of emotional_support, get_vitals, medication_reminder, list_reminders, navigate, greeting, general_query, unknown
 - emotion: most prominent emotional state, or null
 - emotional_context: detailed description of the user's emotional/psychological state
 - confidence: float 0.0–1.0

@@ -4,13 +4,14 @@ from fusion.emotional_fusion import FusedState
 
 @dataclass
 class EmotionalState:
-    label: str            # e.g. "calm", "mild_distress", "acute_distress", "elevated_anxiety"
-    arousal: float        # 0.0–1.0
-    valence: float        # -1.0 to 1.0
-    convergence: int      # 0–3 modalities agreeing on distress
-    confidence: float     # how confident we are in this label
-    needs_support: bool   # whether ResponseAgent should prioritize emotional support
-    alert_level: str      # "none", "low", "medium", "high"
+    label: str                        # e.g. "calm", "mild_distress", "acute_distress", "elevated_anxiety"
+    arousal: float                    # 0.0–1.0
+    valence: float                    # -1.0 to 1.0
+    convergence: int                  # 0–3 modalities agreeing on distress
+    confidence: float                 # how confident we are in this label
+    needs_support: bool               # whether ResponseAgent should prioritize emotional support
+    alert_level: str                  # "none", "low", "medium", "high"
+    dominant_emotion: str | None = None  # e.g. "sadness", "anxiety", or None
 
 
 def _classify_label(arousal: float, valence: float, convergence: int) -> str:
@@ -67,4 +68,5 @@ class EmotionalAgent:
             confidence=confidence,
             needs_support=needs_support,
             alert_level=alert,
+            dominant_emotion=fused.dominant_emotion,
         )

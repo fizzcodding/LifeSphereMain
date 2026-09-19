@@ -1,21 +1,121 @@
+SPHEREAI CONTEXT FOR AGENTS
+============================
+Updated: 2026-09-18
 
-## Kiro
+PROJECT
+-------
+SphereAI is the emotional intelligence subsystem of LifeSphere, an autonomous caregiving
+ecosystem for elderly and vulnerable people. LifeSphere has five subsystems: Vital32
+(biometric wearable), HollowRover (autonomous rover), EntryGuard (perimeter security),
+HollowCore (home automation), SphereAI (emotional intelligence). All share a Firebase
+Realtime Database backend (project: hollow-core).
 
-That's a copy-paste indentation issue from the terminal. Run it as a file instead:
+SphereAI is NOT a chatbot. It fuses language, voice, and biological signals to understand
+emotional state and respond like a compassionate therapist. It never directly controls
+hardware. All hardware actions are structured events routed through SphereCore (Flutter
+app) via Firebase.
 
-## User
+DEADLINE: Flight Sep 30 2026. Demo Oct 2 2026. Prototype must freeze before flight.
 
-hey?
+PIPELINE (fully implemented and working)
+-----------------------------------------
+text -> LanguageAgent -> BiologyAgent -> VoiceAgent(mock) -> EmotionalFusion
+     -> EmotionalAgent -> ResponseAgent -> SphereCoreClient(Firebase)
 
-## User
+INTERFACES
+----------
+CLI:  python main.py                          (Firebase login prompt, auto-saves creds to .env)
+Web:  python web_demo/app.py                  (localhost:5050, terminal aesthetic UI)
+Test: venv/bin/python -m pytest tests/        (14 passing, no network required)
 
-hey
+ARCHITECTURE RULES
+------------------
+1. SphereAI never controls hardware directly. Emits structured action dicts only.
+2. Agents are perception-only. LanguageAgent/BiologyAgent/VoiceAgent do NOT generate replies.
+3. EmotionalAgent is the ONLY layer that makes psychological interpretations.
+4. ResponseAgent generates the reply using EmotionalState + LanguageResult.
+5. BiologyAgent uses deterministic threshold logic only. No LLM.
+6. All Gemini calls go through core/gemini.py which auto-retries all fallback models on 503.
 
-## Kiro
+FILES
+-----
+main.py                     CLI entrypoint, full pipeline loop, Firebase login + credential save
+config.py                   GEMINI_API_KEY and GEMINI_MODELS list loaded from .env
+.env                        GEMINI_API_KEY, GEMINI_MODEL + 3 fallbacks, FIREBASE_EMAIL, FIREBASE_PASSWORD
 
-Transform any idea into fully working code. What do you want to build today?
+agents/
+  language_agent.py         LanguageAgent -> LanguageResult(intent, emotion, emotional_context, entities, raw_text)
+  biology_agent.py          BiologyAgent -> BiologyResult + VitalSigns dataclass + mock_vitals()
+  voice_agent.py            VoiceAgent STUB -> VoiceResult + mock_voice() [hardware pending]
+  emotional_agent.py        EmotionalAgent -> EmotionalState(label, alert_level, needs_support, confidence)
+  response_agent.py         ResponseAgent(LanguageResult, EmotionalState) -> ResponseResult(reply, action)
 
-## User
+fusion/
+  emotional_fusion.py       EmotionalFusion -> FusedState(arousal, valence, convergence)
+                            Weights: language 55%, biology 30%, voice 15%
 
-hey
-(END)
+core/
+  gemini.py                 Shared generate() with automatic fallback across all configured models
+  spherecore_client.py      Firebase REST: authenticate(), get_vitals(), add_reminder(), write_ai_suggestions()
+
+web_demo/
+  app.py                    Flask port 5050: /api/login  /api/skip_login  /api/chat
+  index.html                Frontend UI (terminal aesthetic, green-on-black, JetBrains Mono)
+
+tests/
+  test_agents.py            14 pytest tests covering BiologyAgent, VoiceAgent, EmotionalFusion, EmotionalAgent
+
+DATA CONTRACTS
+--------------
+LanguageResult:   intent(constrained to 7 values), emotion, emotional_context, confidence, entities, raw_text
+VitalSigns:       heart_rate, spo2, skin_temperature, activity(0.0-1.0 normalized)
+BiologyResult:    vitals, heart_rate_elevated, spo2_low, temperature_abnormal, activity_level, stress_indicators, source
+VoiceResult:      pitch_mean, energy, speaking_rate, tremor, long_pauses, source
+FusedState:       arousal(0-1), valence(-1 to 1), convergence(0-3), dominant_emotion, emotional_context
+EmotionalState:   label, arousal, valence, convergence, confidence, needs_support, alert_level
+ResponseResult:   reply(str), action(dict or None)
+
+INTENT VOCABULARY (constrained — for SphereCore routing)
+---------------------------------------------------------
+emotional_support | get_vitals | medication_reminder | navigate | greeting | general_query | unknown
+
+EMOTIONAL STATE LABELS
+----------------------
+calm | engaged | low_mood | mild_distress | acute_distress | elevated_anxiety
+alert_level: none | low | medium | high
+
+FIREBASE PATHS (users/{uid}/...)
+---------------------------------
+vital32/hr/currently          heart rate (int)
+vital32/spo2/currently        SpO2 (int)
+vital32/temp/currently        temperature (float)
+vital32/steps/currently       steps (int) -> normalized to activity by dividing by 10000
+vital32/aiSuggestions/        SphereAI writes 3 tips here, Flutter reads and displays
+reminders/                    SphereAI pushes medication reminders here
+profile/                      name, birthDate, phonetag
+
+REMINDER SCHEMA (must match Flutter MedicineReminder freezed model)
+--------------------------------------------------------------------
+{ "name": str, "slot": "morning"|"afternoon"|"evening", "time": "HH:MM", "days": [str], "note": str|null }
+
+GEMINI FALLBACK ORDER
+---------------------
+gemini-3.5-flash -> gemini-3.7-flash -> gemini-2.5-flash -> gemini-3.0-flash
+Controlled by: GEMINI_MODEL, GEMINI_FALLBACK, GEMINI_FALLBACKS, GEMINI_FALLBACKT in .env
+All agents use core/gemini.py generate() — never call the Gemini client directly.
+
+NOT DONE YET
+------------
+- VoiceAgent real implementation (needs microphone hardware + librosa for feature extraction)
+- Hardware integration (ESP32 firmware, physical sensors, serial bridge)
+- SphereCore event routing (action dicts currently printed/logged, not POSTed to SphereCore API yet)
+- Emotional model training pipeline (classifier/train/ directory scaffolded but empty)
+- Web UI terminal aesthetic redesign (index.html currently has a generic dark theme, redesign pending)
+
+WHAT NOT TO DO
+--------------
+- Do not add databases, Docker, microservices, or message queues
+- Do not make SphereAI control hardware directly
+- Do not put reply generation in LanguageAgent (it is perception only)
+- Do not invent new intent values outside the constrained vocabulary
+- Do not break the fallback model chain in core/gemini.py

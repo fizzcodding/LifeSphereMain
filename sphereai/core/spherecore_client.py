@@ -3,14 +3,13 @@ import os
 from dotenv import load_dotenv
 from agents.biology_agent import VitalSigns
 
-load_dotenv()
+# Explicit .env path (sphereai/.env) resolved from this file's location so that
+# loading works regardless of the process's current working directory.
+_ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+load_dotenv(_ENV_PATH)
 
-_FIREBASE_API_KEY = "AIzaSyAYjewzbRjz9szLLhdvh-ld3IN-jxAy0D0"
 _DATABASE_URL = "https://hollow-core-default-rtdb.firebaseio.com"
 _AUTH_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
-
-_FIREBASE_EMAIL = os.getenv("FIREBASE_EMAIL")
-_FIREBASE_PASSWORD = os.getenv("FIREBASE_PASSWORD")
 
 
 class SphereCoreClient:
@@ -19,13 +18,17 @@ class SphereCoreClient:
         self._uid: str | None = None
 
     def authenticate(self, email: str | None = None, password: str | None = None) -> bool:
-        email = email or _FIREBASE_EMAIL
-        password = password or _FIREBASE_PASSWORD
+        # Read credentials live so .env edits take effect without a process restart.
+        email = email or os.getenv("FIREBASE_EMAIL")
+        password = password or os.getenv("FIREBASE_PASSWORD")
+        api_key = os.getenv("FIREBASE_WEB_API_KEY")
         if not email or not password:
             raise ValueError("Email and password required")
+        if not api_key:
+            raise ValueError("FIREBASE_WEB_API_KEY not set in .env")
 
         res = requests.post(
-            f"{_AUTH_URL}?key={_FIREBASE_API_KEY}",
+            f"{_AUTH_URL}?key={api_key}",
             json={
                 "email": email,
                 "password": password,
@@ -71,6 +74,18 @@ class SphereCoreClient:
             skin_temperature=skin_temperature,
             activity=activity,
         )
+
+    def get_reminders(self) -> list[dict]:
+        self._ensure_auth()
+        res = requests.get(self._db_url("reminders"))
+        if res.status_code != 200 or res.json() is None:
+            return []
+        data = res.json()
+        reminders = []
+        for key, val in data.items():
+            if isinstance(val, dict):
+                reminders.append({**val, "_id": key})
+        return reminders
 
     def add_reminder(self, name: str, slot: str, time: str, days: list[str], note: str | None = None) -> bool:
         self._ensure_auth()

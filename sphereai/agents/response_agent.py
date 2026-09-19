@@ -5,7 +5,7 @@ from core.gemini import generate
 from agents.language_agent import LanguageResult
 from agents.emotional_agent import EmotionalState
 
-_ACTION_INTENTS = {"get_vitals", "navigate", "medication_reminder"}
+_ACTION_INTENTS = {"get_vitals", "navigate", "medication_reminder", "list_reminders"}
 
 _TONE_GUIDE = {
     "calm":             "The person is calm. Be warm and present. Match their energy.",
