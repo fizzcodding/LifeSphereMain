@@ -6,11 +6,6 @@ _client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 def generate(contents: str, response_mime_type: str = "application/json") -> str:
-    """
-    Try each model in GEMINI_MODELS in order.
-    Returns the raw response text from the first model that succeeds.
-    Raises RuntimeError if all models fail.
-    """
     last_error = None
 
     for model in GEMINI_MODELS:
@@ -29,5 +24,32 @@ def generate(contents: str, response_mime_type: str = "application/json") -> str
 
     raise RuntimeError(
         f"All Gemini models failed. Last error: {last_error}. "
+        f"Models tried: {GEMINI_MODELS}"
+    )
+
+
+def transcribe(wav_bytes: bytes) -> str:
+    last_error = None
+
+    for model in GEMINI_MODELS:
+        try:
+            part = types.Part.from_bytes(data=wav_bytes, mime_type="audio/wav")
+            response = _client.models.generate_content(
+                model=model,
+                contents=[
+                    part,
+                    "Transcribe the speech in this audio clip exactly. "
+                    "Return only the spoken words with no commentary.",
+                ],
+                config=types.GenerateContentConfig(response_mime_type="text/plain"),
+            )
+            text = response.text or ""
+            return text.strip()
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise RuntimeError(
+        f"All Gemini models failed during transcription. Last error: {last_error}. "
         f"Models tried: {GEMINI_MODELS}"
     )

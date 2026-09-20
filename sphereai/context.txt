@@ -119,3 +119,42 @@ WHAT NOT TO DO
 - Do not put reply generation in LanguageAgent (it is perception only)
 - Do not invent new intent values outside the constrained vocabulary
 - Do not break the fallback model chain in core/gemini.py
+
+ESP32-S3 AUDIO BRIDGE (Prompt 2)
+---------------------------------
+SPHEREAI_AUDIO env var: "laptop" (default) uses sounddevice mic + pyttsx3 speaker on the host.
+                         "esp"    routes all audio through the ESP32-S3 over USB serial.
+
+ESP_AUDIO_PORT:  override serial port (e.g. /dev/ttyACM0). Auto-detected from VIDs 303A/10C4/1A86
+                 when exactly one matching port is present. Required if multiple ESP boards attached.
+ESP_MIC_GAIN:    float multiplier applied to raw mic samples after DC removal (default 1.0).
+                 Raise to 4 or 8 if mic is very quiet.
+ESP_SPK_VOLUME:  float 0–1 applied before PCM encoding sent to speaker (default 0.8).
+
+SERIAL PROTOCOL (921600 baud, USB CDC)
+  Host sends  ->  Device replies
+  PING        ->  PONG
+  REC <ms>    ->  AUD <nbytes>, then nbytes PCM (16 kHz 16-bit LE mono), then OK
+  PLAY <n>    ->  RDY, host sends n bytes in <=1024 chunks, device acks each with "K", ends DONE
+  (idle)      ->  EVT BTN  (debounced BOOT button press on GPIO 0)
+
+PIN ASSIGNMENTS (INMP441 mic / MAX98357A amp, confirmed wired)
+  PIN_MIC_BCLK=5  PIN_MIC_WS=4  PIN_MIC_DIN=6  (I2S_NUM_1, left channel, L/R tied to GND)
+  PIN_AMP_BCLK=15 PIN_AMP_LRC=16 PIN_AMP_DIN=7  (I2S_NUM_0, stereo frame, L=R)
+  PIN_BTN=0       (BOOT button, active low, INPUT_PULLUP, 250 ms debounce)
+  To change any pin: edit only firmware/sphereai_audio/config.h
+
+NEW FILES ADDED
+  core/esp_audio.py              EspAudio class + find_port + use_esp + get_esp singleton
+  core/speech.py                 speak(text) + speak_blocking(text), routes to ESP or local pyttsx3
+  hardware/esp_selftest.py       4-step hardware health check (play beep, record, playback, features)
+  firmware/sphereai_audio/config.h          Pin and format constants for the ESP32-S3 sketch
+  firmware/sphereai_audio/sphereai_audio.ino  Arduino sketch (legacy driver/i2s.h API)
+  tests/test_esp_audio.py        9 pty-based unit tests, no hardware required
+  tests/test_voice_real.py       10 offline unit tests for VoiceAgent listen/to_wav_bytes/analyze_signal
+
+UPDATED NOT DONE YET
+- VoiceAgent real microphone: implemented, routes to ESP or sounddevice, pending hardware verification
+- ESP32-S3 audio firmware: written (firmware/sphereai_audio/), compiled (esp32:esp32 2.0.0), NOT yet
+  flashed or hardware-verified (no board detected during build session). Pending: flash, selftest,
+  real mic quality, real speaker output, and button confirmation.

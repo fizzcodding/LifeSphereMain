@@ -7,6 +7,7 @@ from agents.response_agent import ResponseAgent
 from agents.emotional_agent import EmotionalAgent
 from fusion.emotional_fusion import EmotionalFusion
 from core.spherecore_client import SphereCoreClient
+from core.gemini import transcribe
 
 print(r"""
 ███████╗██████╗ ██╗  ██╗███████╗██████╗ ███████╗ █████╗ ██████╗
@@ -158,6 +159,7 @@ def _infer_slot(time_str: str) -> str:
 
 while True:
     msg = input("You: ").strip()
+    voice_result = None
 
     if msg.lower() in ("quit", "exit", "q"):
         break
@@ -170,9 +172,34 @@ while True:
             print("[SphereCore] Connected to Firebase.\n")
         continue
 
+    if msg.lower() in ("v", "voice", "p", "ptt"):
+        try:
+            if msg.lower() in ("p", "ptt"):
+                from core.esp_audio import get_esp, use_esp
+
+                if not use_esp():
+                    print("Push to talk needs SPHEREAI_AUDIO=esp.\n")
+                    continue
+                print("Press the BOOT button on the ESP32-S3 to talk...")
+                if not get_esp().wait_button(timeout=60):
+                    print("No button press.\n")
+                    continue
+            print("Listening for 6 seconds...")
+            y = voice_agent.listen(6.0)
+            msg = transcribe(voice_agent.to_wav_bytes(y)).strip()
+            voice_result = voice_agent.analyze_signal(y)
+        except Exception as e:
+            print(f"[Voice] failed: {e}\n")
+            continue
+        if not msg:
+            print("Didn't catch anything.\n")
+            continue
+        print(f"You (voice): {msg}")
+
     try:
         vitals = _get_vitals()
-        voice_result = mock_voice()
+        if voice_result is None:
+            voice_result = mock_voice()
 
         lang_result = lang_agent.analyze(msg)
         bio_result = bio_agent.analyze(vitals, source="vital32_live" if _firebase_ready else "mock")
