@@ -1,5 +1,4 @@
 import io
-import struct
 import wave
 from dataclasses import dataclass
 from typing import Optional
@@ -7,6 +6,7 @@ from typing import Optional
 import numpy as np
 
 SAMPLE_RATE = 16000
+HOP = 160
 
 
 @dataclass
@@ -30,11 +30,29 @@ def mock_voice() -> VoiceResult:
     )
 
 
-class VoiceAgent:
-    def warmup(self) -> None:
-        import librosa
-        _ = librosa.feature.rms(y=np.zeros(SAMPLE_RATE, dtype=np.float32))
+def _detect_tremor(f0: np.ndarray) -> bool:
+    voiced = np.flatnonzero(~np.isnan(f0))
+    if voiced.size < 50:
+        return False
+    runs = np.split(voiced, np.flatnonzero(np.diff(voiced) > 1) + 1)
+    hop_s = HOP / SAMPLE_RATE
+    for run in runs:
+        if run.size < 50:
+            continue
+        seg = f0[run]
+        cents = 1200.0 * np.log2(seg / np.median(seg))
+        t = np.arange(cents.size)
+        cents = cents - np.polyval(np.polyfit(t, cents, 2), t)
+        spec = np.abs(np.fft.rfft(cents * np.hanning(cents.size))) ** 2
+        freqs = np.fft.rfftfreq(cents.size, d=hop_s)
+        band = spec[(freqs >= 4.0) & (freqs <= 12.0)].sum()
+        total = spec[(freqs >= 0.5) & (freqs <= 20.0)].sum()
+        if total > 0 and band / total > 0.5 and cents.std() > 8.0:
+            return True
+    return False
 
+
+class VoiceAgent:
     def listen(self, seconds: float = 6.0, sr: int = SAMPLE_RATE) -> np.ndarray:
         from core.esp_audio import get_esp, use_esp
 
@@ -48,69 +66,67 @@ class VoiceAgent:
         return audio[:, 0]
 
     def to_wav_bytes(self, y: np.ndarray, sr: int = SAMPLE_RATE) -> bytes:
-        pcm = (np.clip(y, -1.0, 1.0) * 32767).astype("<i2").tobytes()
+        pcm = (np.clip(y, -1.0, 1.0) * 32767).astype(np.int16)
         buf = io.BytesIO()
-        with wave.open(buf, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(sr)
-            wf.writeframes(pcm)
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            w.writeframes(pcm.tobytes())
         return buf.getvalue()
 
-    def analyze_signal(self, y: np.ndarray, sr: int = SAMPLE_RATE) -> VoiceResult:
-        import librosa
-
-        if y is None or len(y) == 0:
-            return mock_voice()
-
-        energy = float(np.sqrt(np.mean(y ** 2)))
-
-        try:
-            f0, voiced_flag, _ = librosa.pyin(
-                y, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr
-            )
-            voiced = f0[voiced_flag] if voiced_flag is not None else np.array([])
-            pitch_mean = float(np.nanmean(voiced)) if len(voiced) > 0 else 0.0
-        except Exception:
-            pitch_mean = 0.0
-            voiced = np.array([])
-
-        hop = 512
-        rms = librosa.feature.rms(y=y, hop_length=hop)[0]
-        threshold = float(np.mean(rms)) * 0.3
-        silent = rms < threshold
-        transitions = int(np.sum(np.diff(silent.astype(int)) == 1))
-        total_frames = len(rms)
-        speaking_rate = transitions / (total_frames * hop / sr) if total_frames > 0 else 0.0
-
-        pitch_vals = f0 if "f0" in dir() and f0 is not None else np.array([pitch_mean])
-        valid = pitch_vals[~np.isnan(pitch_vals)] if len(pitch_vals) > 0 else np.array([])
-        tremor = bool(np.std(valid) > 15.0) if len(valid) > 3 else False
-
-        silent_runs = 0
-        run = 0
-        for s in silent:
-            if s:
-                run += 1
-                if run == int(0.5 * sr / hop):
-                    silent_runs += 1
-            else:
-                run = 0
-        long_pauses = silent_runs >= 2
-
-        return VoiceResult(
-            pitch_mean=pitch_mean,
-            energy=energy,
-            speaking_rate=speaking_rate,
-            tremor=tremor,
-            long_pauses=long_pauses,
-            source="live",
-        )
+    def warmup(self) -> None:
+        t = np.arange(0, 1.0, 1 / SAMPLE_RATE)
+        tone = (0.1 * np.sin(2 * np.pi * 150 * t)).astype(np.float32)
+        self.analyze_signal(tone, SAMPLE_RATE)
 
     def analyze(self, audio_path: Optional[str] = None) -> VoiceResult:
         if audio_path is None:
             return mock_voice()
-        raise NotImplementedError(
-            "Real audio analysis not yet implemented. "
-            "Requires librosa and a microphone or audio file input."
+        import librosa
+
+        y, sr = librosa.load(audio_path, sr=SAMPLE_RATE, mono=True)
+        return self.analyze_signal(y, sr)
+
+    def analyze_signal(self, y: np.ndarray, sr: int = SAMPLE_RATE) -> VoiceResult:
+        import librosa
+
+        y = np.asarray(y, dtype=np.float32)
+        if y.size < sr // 2 or float(np.sqrt(np.mean(y ** 2))) < 0.003:
+            return mock_voice()
+
+        intervals = librosa.effects.split(y, top_db=30)
+        if len(intervals) == 0:
+            return mock_voice()
+
+        speech = np.concatenate([y[s:e] for s, e in intervals])
+        speech_dur = speech.size / sr
+        if speech_dur < 0.4:
+            return mock_voice()
+
+        rms = float(np.sqrt(np.mean(speech ** 2)))
+        energy = float(min(rms / 0.2, 1.0))
+
+        f0, _, _ = librosa.pyin(
+            y, fmin=70, fmax=400, sr=sr, frame_length=1024, hop_length=HOP
+        )
+        pitch_mean = float(np.nanmean(f0)) if np.any(~np.isnan(f0)) else 0.0
+        tremor = _detect_tremor(f0)
+
+        onsets = librosa.onset.onset_detect(y=speech, sr=sr, hop_length=HOP, units="time")
+        speaking_rate = float(len(onsets) / speech_dur)
+
+        gaps = [
+            (intervals[i + 1][0] - intervals[i][1]) / sr
+            for i in range(len(intervals) - 1)
+        ]
+        long_pauses = any(g > 1.0 for g in gaps)
+
+        return VoiceResult(
+            pitch_mean=round(pitch_mean, 1),
+            energy=round(energy, 3),
+            speaking_rate=round(speaking_rate, 2),
+            tremor=bool(tremor),
+            long_pauses=bool(long_pauses),
+            source="mic",
         )

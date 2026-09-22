@@ -10,6 +10,8 @@ from agents.response_agent import ResponseAgent
 from agents.emotional_agent import EmotionalAgent
 from fusion.emotional_fusion import EmotionalFusion
 from core.spherecore_client import SphereCoreClient
+from core.gemini import transcribe
+from core.speech import speak
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -20,6 +22,8 @@ voice_agent = VoiceAgent()
 emotional_agent = EmotionalAgent()
 fusion = EmotionalFusion()
 response_agent = ResponseAgent()
+voice_agent.warmup()
+_last_voice: dict = {}
 
 # Clients are cached per session for the lifetime of the process, including
 # their _token/_uid. Tradeoff: SphereCoreClient reads credentials live from
@@ -109,6 +113,21 @@ def skip_login():
     return jsonify({"ok": True, "mode": "mock"})
 
 
+@app.route("/api/voice", methods=["POST"])
+def voice():
+    sid = session.get("id")
+    try:
+        y = voice_agent.listen(6.0)
+        text = transcribe(voice_agent.to_wav_bytes(y)).strip()
+        result = voice_agent.analyze_signal(y)
+    except Exception as e:
+        return jsonify({"error": f"Mic failed: {e}"}), 503
+    if not text:
+        return jsonify({"error": "Nothing heard"}), 400
+    _last_voice[sid] = result
+    return jsonify({"text": text, "source": result.source})
+
+
 @app.route("/api/chat", methods=["POST"])
 def chat():
     data = request.json
@@ -121,15 +140,19 @@ def chat():
     firebase_ready = client._uid is not None
 
     try:
-        vitals = client.get_vitals() if firebase_ready else mock_vitals()
-        voice_result = mock_voice()
+        live = client.get_vitals() if firebase_ready else None
+        vitals = live if live is not None else mock_vitals()
+        bio_source = "vital32_live" if live is not None else "mock"
+        voice_result = _last_voice.pop(sid, None) or mock_voice()
         lang_result = lang_agent.analyze(msg)
-        bio_result = bio_agent.analyze(vitals, source="vital32_live" if firebase_ready else "mock")
+        bio_result = bio_agent.analyze(vitals, source=bio_source)
         fused = fusion.fuse(lang_result, bio_result, voice_result)
         emotional_state = emotional_agent.interpret(fused)
         response_result = response_agent.generate(lang_result, emotional_state)
     except Exception as e:
         return jsonify({"error": f"SphereAI unavailable: {e}"}), 503
+
+    speak(response_result.reply)
 
     action_status = None
     if response_result.action and firebase_ready:

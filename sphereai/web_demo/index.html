@@ -129,6 +129,20 @@
   #send-btn:hover { background: #6d28d9; }
   #send-btn:disabled { background: #374151; cursor: not-allowed; }
 
+  #mic-btn {
+    background: #7c3aed;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  #mic-btn:hover { background: #6d28d9; }
+  #mic-btn:disabled { background: #374151; cursor: not-allowed; }
+
   #info-panel {
     width: 300px;
     overflow-y: auto;
@@ -296,6 +310,7 @@
     <div id="input-row">
       <input id="msg-input" type="text" placeholder="Talk to SphereAI..." autocomplete="off">
       <button id="send-btn">Send</button>
+      <button id="mic-btn">Mic</button>
     </div>
   </div>
 
@@ -422,6 +437,26 @@
 
   sendBtn.addEventListener('click', sendMessage);
   msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+  document.getElementById('mic-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('mic-btn');
+    btn.disabled = true;
+    btn.textContent = 'Listening...';
+    try {
+      const res = await fetch('/api/voice', { method: 'POST' });
+      const data = await res.json();
+      if (data.text) {
+        msgInput.value = data.text;
+        await sendMessage();
+      } else {
+        addMessage(data.error || 'Nothing heard', 'system');
+      }
+    } catch (e) {
+      addMessage('Mic error', 'system');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Mic';
+  });
 
   // Login
   document.getElementById('login-btn').addEventListener('click', async () => {

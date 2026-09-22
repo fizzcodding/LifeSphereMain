@@ -8,6 +8,7 @@ from agents.emotional_agent import EmotionalAgent
 from fusion.emotional_fusion import EmotionalFusion
 from core.spherecore_client import SphereCoreClient
 from core.gemini import transcribe
+from core.speech import speak
 
 print(r"""
 ███████╗██████╗ ██╗  ██╗███████╗██████╗ ███████╗ █████╗ ██████╗
@@ -21,6 +22,7 @@ print(r"""
 lang_agent = LanguageAgent()
 bio_agent = BiologyAgent()
 voice_agent = VoiceAgent()
+voice_agent.warmup()
 emotional_agent = EmotionalAgent()
 fusion = EmotionalFusion()
 response_agent = ResponseAgent()
@@ -98,10 +100,12 @@ else:
 def _get_vitals():
     if _firebase_ready:
         try:
-            return spherecore.get_vitals()
+            v = spherecore.get_vitals()
+            if v is not None:
+                return v, "vital32_live"
         except Exception:
             pass
-    return mock_vitals()
+    return mock_vitals(), "mock"
 
 
 def _format_reminders(reminders: list) -> str:
@@ -197,12 +201,12 @@ while True:
         print(f"You (voice): {msg}")
 
     try:
-        vitals = _get_vitals()
+        vitals, bio_source = _get_vitals()
         if voice_result is None:
             voice_result = mock_voice()
 
         lang_result = lang_agent.analyze(msg)
-        bio_result = bio_agent.analyze(vitals, source="vital32_live" if _firebase_ready else "mock")
+        bio_result = bio_agent.analyze(vitals, source=bio_source)
 
         fused = fusion.fuse(lang_result, bio_result, voice_result)
         emotional_state = emotional_agent.interpret(fused)
@@ -215,6 +219,7 @@ while True:
 
     print()
     print(f"SphereAI: {response_result.reply}")
+    speak(response_result.reply)
     print()
 
     alert_prefix = ""
@@ -243,6 +248,14 @@ while True:
         f"hr={bio_result.vitals.heart_rate:.0f}{hr_flag} | "
         f"spo2={bio_result.vitals.spo2:.0f}{spo2_flag} | "
         f"stress_flags={bio_result.stress_indicators}"
+    )
+    print(
+        f"[VOICE ({voice_result.source})] "
+        f"pitch={voice_result.pitch_mean:.0f} | "
+        f"energy={voice_result.energy:.2f} | "
+        f"rate={voice_result.speaking_rate:.1f} | "
+        f"tremor={voice_result.tremor} | "
+        f"pauses={voice_result.long_pauses}"
     )
     print()
 

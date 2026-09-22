@@ -2,6 +2,7 @@
 #include <esp_log.h>
 #include <string.h>
 #include "config.h"
+#include "compat.h"
 
 #define MIC_PORT I2S_NUM_1
 #define SPK_PORT I2S_NUM_0
@@ -53,6 +54,7 @@ static bool startMic() {
 
   i2s_pin_config_t pins;
   memset(&pins, 0, sizeof(pins));
+  setMck(pins, 0);
   pins.bck_io_num = PIN_MIC_BCLK;
   pins.ws_io_num = PIN_MIC_WS;
   pins.data_out_num = I2S_PIN_NO_CHANGE;
@@ -84,6 +86,7 @@ static bool startSpk() {
 
   i2s_pin_config_t pins;
   memset(&pins, 0, sizeof(pins));
+  setMck(pins, 0);
   pins.bck_io_num = PIN_AMP_BCLK;
   pins.ws_io_num = PIN_AMP_LRC;
   pins.data_out_num = PIN_AMP_DIN;

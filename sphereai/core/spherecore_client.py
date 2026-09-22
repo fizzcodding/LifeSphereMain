@@ -10,6 +10,7 @@ load_dotenv(_ENV_PATH)
 
 _DATABASE_URL = "https://hollow-core-default-rtdb.firebaseio.com"
 _AUTH_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+_TIMEOUT = 5
 
 
 class SphereCoreClient:
@@ -34,6 +35,7 @@ class SphereCoreClient:
                 "password": password,
                 "returnSecureToken": True,
             },
+            timeout=_TIMEOUT,
         )
 
         if res.status_code != 200:
@@ -54,19 +56,24 @@ class SphereCoreClient:
     def get_vitals(self) -> VitalSigns | None:
         self._ensure_auth()
 
-        def _read(key: str) -> float:
-            res = requests.get(self._db_url(f"vital32/{key}/currently"))
-            if res.status_code == 200 and res.json() is not None:
-                return float(res.json())
-            return 0.0
+        def _read(key: str) -> float | None:
+            try:
+                res = requests.get(self._db_url(f"vital32/{key}/currently"), timeout=_TIMEOUT)
+                if res.status_code == 200 and res.json() is not None:
+                    return float(res.json())
+            except Exception:
+                pass
+            return None
 
         heart_rate = _read("hr")
         spo2 = _read("spo2")
         skin_temperature = _read("temp")
         steps = _read("steps")
 
-        # Normalize steps to 0.0–1.0 activity scale (cap at 10000 steps = 1.0)
-        activity = min(steps / 10000.0, 1.0)
+        if not heart_rate or not spo2 or not skin_temperature:
+            return None
+
+        activity = min((steps or 0.0) / 10000.0, 1.0)
 
         return VitalSigns(
             heart_rate=heart_rate,
@@ -77,7 +84,7 @@ class SphereCoreClient:
 
     def get_reminders(self) -> list[dict]:
         self._ensure_auth()
-        res = requests.get(self._db_url("reminders"))
+        res = requests.get(self._db_url("reminders"), timeout=_TIMEOUT)
         if res.status_code != 200 or res.json() is None:
             return []
         data = res.json()
@@ -102,6 +109,7 @@ class SphereCoreClient:
         res = requests.post(
             self._db_url("reminders"),
             json=reminder,
+            timeout=_TIMEOUT,
         )
         return res.status_code == 200
 
@@ -112,5 +120,6 @@ class SphereCoreClient:
         res = requests.put(
             self._db_url("vital32/aiSuggestions"),
             json=payload,
+            timeout=_TIMEOUT,
         )
         return res.status_code == 200
