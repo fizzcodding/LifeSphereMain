@@ -7,9 +7,9 @@
 
 #define FB_WIFI_SSID "Home Wifi"
 #define FB_WIFI_PASSWORD "15088959"
-#define FB_DATABASE_URL "https://hollow-core-default-rtdb.firebaseio.com"
-#define FB_AUTH_TOKEN "YOUR_FIREBASE_DATABASE_SECRET_OR_AUTH_TOKEN"
-#define FB_USER_UID "YOUR_FIREBASE_USER_UID"
+#define FB_DATABASE_URL "https://hollow-core-default-rtdb.firebaseio.com/"
+#define FB_AUTH_TOKEN "AIzaSyAYjewzbRjz9szLLhdvh-ld3IN-jxAy0D0"
+#define FB_USER_UID "zFUV2vqTS7Uxy6ee6RZdUjFkp2m1"
 #define FB_CONNECT_TIMEOUT_MS 10000
 #define FB_RECONNECT_INTERVAL_MS 30000
 #define FB_HTTP_TIMEOUT_MS 5000
