@@ -33,7 +33,7 @@ class BiologyAgent:
     def analyze(self, vitals: VitalSigns, source: str = "mock") -> BiologyResult:
         heart_rate_elevated = vitals.heart_rate > 100
         spo2_low = vitals.spo2 < 95
-        temperature_abnormal = not 36.1 <= vitals.skin_temperature <= 37.5
+        temperature_abnormal = not 31.0 <= vitals.skin_temperature <= 35.5
 
         if vitals.activity < 0.3:
             activity_level = "resting"
