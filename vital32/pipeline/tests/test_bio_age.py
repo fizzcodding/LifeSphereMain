@@ -16,6 +16,7 @@ from pipeline.models.train_bio_age_estimator import (
 MODELS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'models')
 PASS = '\033[92mPASS\033[0m'
 FAIL = '\033[91mFAIL\033[0m'
+SKIP = '\033[93mSKIP\033[0m'
 
 
 def check(name: str, condition: bool, detail: str = '') -> bool:
@@ -23,6 +24,14 @@ def check(name: str, condition: bool, detail: str = '') -> bool:
     detail_str = f'  ({detail})' if detail else ''
     print(f'  [{status}] {name}{detail_str}')
     return condition
+
+
+def _models_need_retraining() -> bool:
+    scaler_path = os.path.join(MODELS_DIR, 'bio_age_scaler.joblib')
+    if not os.path.exists(scaler_path):
+        return False
+    scaler = joblib.load(scaler_path)
+    return getattr(scaler, 'n_features_in_', None) == 11
 
 
 def test_model_files_exist():
@@ -37,12 +46,18 @@ def test_model_files_exist():
 def test_inference_examples():
     print('\n--- Bio age inference examples ---')
     print('  [SYNTHETIC-DERIVED]')
+
+    if _models_need_retraining():
+        print(f'  [{SKIP}] Models need retraining with chronological_age feature. '
+              'Run train_bio_age_estimator.py first.')
+        return True
+
     rf = joblib.load(os.path.join(MODELS_DIR, 'bio_age_rf.joblib'))
     xgb_model = joblib.load(os.path.join(MODELS_DIR, 'bio_age_xgb.joblib'))
     scaler = joblib.load(os.path.join(MODELS_DIR, 'bio_age_scaler.joblib'))
 
-    healthy_65 = np.array([65.0, 98.0, 36.4, 55.0, 1.2, 10.8, 0.2, 24.0, 55.0, 1013.0, 85000.0])
-    deconditioned_72 = np.array([85.0, 96.0, 36.7, 25.0, 2.1, 9.9, 0.9, 24.0, 55.0, 1013.0, 60000.0])
+    healthy_65 = np.array([65.0, 65.0, 98.0, 36.4, 55.0, 1.2, 10.8, 0.2, 24.0, 55.0, 1013.0, 85000.0])
+    deconditioned_72 = np.array([72.0, 85.0, 96.0, 36.7, 25.0, 2.1, 9.9, 0.9, 24.0, 55.0, 1013.0, 60000.0])
 
     result_healthy = predict_bio_age(rf, xgb_model, scaler, healthy_65)
     result_decond = predict_bio_age(rf, xgb_model, scaler, deconditioned_72)
@@ -66,6 +81,12 @@ def test_inference_examples():
 
 def test_batch_predictions():
     print('\n--- Batch predictions on synthetic data ---')
+
+    if _models_need_retraining():
+        print(f'  [{SKIP}] Models need retraining with chronological_age feature. '
+              'Run train_bio_age_estimator.py first.')
+        return True
+
     rf = joblib.load(os.path.join(MODELS_DIR, 'bio_age_rf.joblib'))
     xgb_model = joblib.load(os.path.join(MODELS_DIR, 'bio_age_xgb.joblib'))
     scaler = joblib.load(os.path.join(MODELS_DIR, 'bio_age_scaler.joblib'))
@@ -91,11 +112,13 @@ def test_batch_predictions():
 def test_feature_columns():
     print('\n--- Feature column definition ---')
     ok = True
-    ok &= check('11 feature columns defined', len(FEATURE_COLUMNS) == 11,
+    ok &= check('12 feature columns defined', len(FEATURE_COLUMNS) == 12,
                 f'got {len(FEATURE_COLUMNS)}')
-    required_features = ['heart_rate', 'spo2', 'skin_temp_C', 'hrv_rmssd', 'hrv_lf_hf', 'gsr_uS']
+    required_features = ['chronological_age', 'heart_rate', 'spo2', 'skin_temp_C',
+                         'hrv_rmssd', 'hrv_lf_hf', 'gsr_uS']
     for feat in required_features:
         ok &= check(f'Feature {feat!r} present', feat in FEATURE_COLUMNS)
+    ok &= check("'chronological_age' is first feature", FEATURE_COLUMNS[0] == 'chronological_age')
     return ok
 
 

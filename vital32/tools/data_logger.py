@@ -1,4 +1,3 @@
-
 import argparse
 import csv
 import time
@@ -17,29 +16,40 @@ root = Path(__file__).resolve().parent.parent
 session = root / args.output / datetime.now().strftime("%Y%m%d_%H%M%S")
 session.mkdir(parents=True, exist_ok=True)
 
-schemas = {
-    "ECG": ["timestamp_ms", "ecg_raw", "leads_off"],
-    "SENSORS": [
-        "timestamp_ms", "acceleration_x", "acceleration_y",
-        "acceleration_z", "gyro_x", "gyro_y", "gyro_z",
-        "air_temperature_c", "humidity_percent", "pressure_hpa",
-        "red_raw", "ir_raw", "uv_raw", "potentiometer_raw"
+SCHEMAS = {
+    "E": ["timestamp_ms", "ecg_adc", "leads_off"],
+    "P": ["timestamp_ms", "red", "ir"],
+    "S": [
+        "timestamp_ms", "ax", "ay", "az",
+        "gx", "gy", "gz",
+        "air_temp_c", "humidity_pct", "pressure_hpa",
+        "object_temp_c", "ambient_temp_c", "gas_resistance_ohm",
+        "steps", "gsr_raw", "uv_raw", "ecg_leads_off",
     ],
-    "TEMPERATURE": [
-        "timestamp_ms", "ambient_temperature_c", "object_temperature_c"
-    ]
+    "T": ["timestamp_ms", "temp_c", "rate_c_per_hour", "cusum", "baseline_ready", "trend_alert", "label"],
+    "MOTOR_FEATURE": ["timestamp_ms", "gyro_rms", "tremor_band_power", "tremor_band_ratio"],
 }
+
+CSV_NAMES = {
+    "E": "ecg.csv",
+    "P": "ppg.csv",
+    "S": "sensors.csv",
+    "T": "temperature.csv",
+    "MOTOR_FEATURE": "motor.csv",
+}
+
+T_LABEL_INDEX = SCHEMAS["T"].index("label")
 
 files = {}
 writers = {}
 
 try:
-    for name, columns in schemas.items():
-        file = open(session / f"{name.lower()}.csv", "w", newline="")
-        writer = csv.writer(file)
-        writer.writerow(columns)
-        files[name] = file
-        writers[name] = writer
+    for key, columns in SCHEMAS.items():
+        f = open(session / CSV_NAMES[key], "w", newline="")
+        w = csv.writer(f)
+        w.writerow(columns)
+        files[key] = f
+        writers[key] = w
 
     with serial.Serial(args.port, args.baud, timeout=1) as ser:
         time.sleep(2)
@@ -48,32 +58,49 @@ try:
         print("Press Ctrl+C to stop.")
 
         while True:
-            line = ser.readline().decode("utf-8", errors="replace").strip()
+            raw = ser.readline().decode("utf-8", errors="replace").strip()
 
-            if not line:
+            if not raw:
                 continue
 
-            parts = line.split(",")
-            name = parts[0]
+            parts = raw.split(",")
+            prefix = parts[0]
 
-            if name not in schemas:
+            if prefix == "BOOT":
+                print(f"BOOT: {raw}")
                 continue
 
-            if len(parts) != len(schemas[name]) + 1:
-                print(f"Skipped malformed {name} record: {line}")
+            if prefix not in SCHEMAS:
                 continue
 
-            try:
-                values = [float(value) for value in parts[1:]]
-            except ValueError:
+            expected = len(SCHEMAS[prefix]) + 1
+            if len(parts) != expected:
+                print(f"Skipped malformed {prefix} record: {raw}")
                 continue
 
-            writers[name].writerow(values)
-            files[name].flush()
+            data_parts = parts[1:]
+
+            if prefix == "T":
+                try:
+                    numeric_parts = [float(v) for v in data_parts[:T_LABEL_INDEX]]
+                except ValueError:
+                    print(f"Skipped non-numeric T record: {raw}")
+                    continue
+                label_str = data_parts[T_LABEL_INDEX]
+                row = numeric_parts + [label_str]
+            else:
+                try:
+                    row = [float(v) for v in data_parts]
+                except ValueError:
+                    print(f"Skipped non-numeric {prefix} record: {raw}")
+                    continue
+
+            writers[prefix].writerow(row)
+            files[prefix].flush()
 
 except KeyboardInterrupt:
     print("\nLogging stopped.")
 
 finally:
-    for file in files.values():
-        file.close()
+    for f in files.values():
+        f.close()

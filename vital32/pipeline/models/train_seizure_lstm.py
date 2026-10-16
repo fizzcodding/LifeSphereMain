@@ -172,7 +172,7 @@ def _extract_sequences_from_edf(
             continue
 
         features = []
-        rmssd_ms = rng.normal(35.0 if is_preictal else 50.0, 8.0)
+        rmssd_ms = rng.normal(42.0, 12.0)
         rmssd_ms = float(np.clip(rmssd_ms, RMSSD_MIN_MS, RMSSD_MAX_MS))
 
         for step_idx in range(win_n):
@@ -191,10 +191,11 @@ def _extract_sequences_from_edf(
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32)
 
 
+
 def load_chbmit_data(subject: str = 'chb01') -> tuple:
     records = _parse_chbmit_summary(subject)
     if not records:
-        return None, None
+        return None, None, None
 
     edf_files_present = []
     for rec in records:
@@ -203,22 +204,25 @@ def load_chbmit_data(subject: str = 'chb01') -> tuple:
             edf_files_present.append((path, rec['seizure_intervals']))
 
     if not edf_files_present:
-        return None, None
+        return None, None, None
 
     rng = np.random.default_rng(42)
     all_X, all_y = [], []
-    for path, intervals in edf_files_present:
+    file_indices = []
+    for file_idx, (path, intervals) in enumerate(edf_files_present):
         X, y = _extract_sequences_from_edf(path, intervals, rng=rng)
         if len(X):
             all_X.append(X)
             all_y.append(y)
+            file_indices.extend([file_idx] * len(X))
 
     if not all_X:
-        return None, None
+        return None, None, None
 
     X = np.concatenate(all_X, axis=0)
     y = np.concatenate(all_y, axis=0)
-    return X, y
+    file_indices = np.array(file_indices, dtype=np.int32)
+    return X, y, file_indices
 
 
 def generate_synthetic_seizure_data(
@@ -342,7 +346,7 @@ def main():
     print('  4: rmssd_norm   (HRV RMSSD, 0-1 normalized)     [Vital32 ONLY]')
     print()
 
-    X, y = load_chbmit_data(subject='chb01')
+    X, y, file_indices = load_chbmit_data(subject='chb01')
     if X is not None:
         data_source = 'CHB-MIT Scalp EEG (chb01, PhysioNet)'
         print(f'Data source: {data_source}')
@@ -355,15 +359,29 @@ def main():
         print('[SYNTHETIC-DERIVED] All metrics below are from synthetic data only.')
         data_source = 'SYNTHETIC — not CHB-MIT patient data'
         X, y = generate_synthetic_seizure_data(n_normal=3000, n_preictal=300)
+        file_indices = None
 
     print(f'Sequences: {len(X)}  shape={X.shape}  label 1 (preictal): {int(y.sum())}  label 0: {int((1-y).sum())}')
     print()
 
     rng = np.random.default_rng(42)
-    idx = rng.permutation(len(X))
-    split = int(0.8 * len(X))
-    X_train, X_val = X[idx[:split]], X[idx[split:]]
-    y_train, y_val = y[idx[:split]], y[idx[split:]]
+
+    if file_indices is not None:
+        unique_files = np.unique(file_indices)
+        split_count = int(0.8 * len(unique_files))
+        train_files_set = set(unique_files[:split_count])
+        val_files_set = set(unique_files[split_count:])
+        train_mask = np.array([fi in train_files_set for fi in file_indices])
+        val_mask = np.array([fi in val_files_set for fi in file_indices])
+        X_train, X_val = X[train_mask], X[val_mask]
+        y_train, y_val = y[train_mask], y[val_mask]
+        print(f'Split: file-split ({len(train_files_set)} train files, {len(val_files_set)} val files)')
+    else:
+        idx = rng.permutation(len(X))
+        split = int(0.8 * len(X))
+        X_train, X_val = X[idx[:split]], X[idx[split:]]
+        y_train, y_val = y[idx[:split]], y[idx[split:]]
+        print('Split: random window split (synthetic data only)')
 
     pos_weight = float((y_train == 0).sum()) / max(1.0, float((y_train == 1).sum()))
     print(f'Class imbalance ratio (neg/pos): {pos_weight:.1f}')

@@ -1,0 +1,55 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "vital32": {
+          "hr": {
+            "currently": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 300"
+            }
+          },
+          "spo2": {
+            "currently": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+            }
+          },
+          "temp": {
+            "currently": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 50"
+            }
+          },
+          "steps": {
+            "currently": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            }
+          }
+        },
+        "reminders": {
+          "$rid": {
+            "slot": {
+              ".validate": "newData.isString() && (newData.val() === 'morning' || newData.val() === 'afternoon' || newData.val() === 'evening')"
+            },
+            "time": {
+              ".validate": "newData.isString() && newData.val().matches(/^([01]\\d|2[0-3]):[0-5]\\d$/)"
+            },
+            "days": {
+              "$day": {
+                ".validate": "newData.isString() && (newData.val() === 'Monday' || newData.val() === 'Tuesday' || newData.val() === 'Wednesday' || newData.val() === 'Thursday' || newData.val() === 'Friday' || newData.val() === 'Saturday' || newData.val() === 'Sunday')"
+              }
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80"
+            },
+            "note": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 200)"
+            }
+          }
+        }
+      }
+    }
+  }
+}

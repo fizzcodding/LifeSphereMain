@@ -1,3 +1,14 @@
+.DS_Store
+.env
+*.pyc
+**/__pycache__/
+__pycache__/
+*.pyo
+secrets.h
 sphereai/.env
-sphereai/.env
-spherecore/.env
+**/venv/
+venv/
+vital32/data/chb-mit/*.edf
+vital32/firmware/secrets.h
+vital32/firmware/vital32/secrets.h
+vital32/models/*.keras

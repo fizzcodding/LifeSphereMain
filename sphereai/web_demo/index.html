@@ -4,13 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SphereAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: #0f0f13;
-    color: #e8e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    background: #000000;
+    color: #00ff00;
     height: 100vh;
     display: flex;
     flex-direction: column;
@@ -18,7 +21,7 @@
 
   header {
     padding: 16px 24px;
-    border-bottom: 1px solid #1e1e2e;
+    border-bottom: 1px solid #003300;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -26,21 +29,23 @@
 
   header h1 {
     font-size: 18px;
-    font-weight: 600;
-    color: #a78bfa;
-    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: #00ff00;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   #status-badge {
     font-size: 11px;
     padding: 3px 8px;
-    border-radius: 99px;
-    background: #1e1e2e;
-    color: #6b7280;
+    border-radius: 2px;
+    background: #001100;
+    color: #005500;
+    font-family: 'JetBrains Mono', monospace;
   }
 
-  #status-badge.live { background: #14532d; color: #4ade80; }
-  #status-badge.mock { background: #1c1917; color: #a8a29e; }
+  #status-badge.live { background: #002200; color: #00ff00; border: 1px solid #00ff00; }
+  #status-badge.mock { background: #001100; color: #006600; border: 1px solid #006600; }
 
   main {
     display: flex;
@@ -52,7 +57,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid #1e1e2e;
+    border-right: 1px solid #003300;
   }
 
   #messages {
@@ -67,81 +72,90 @@
   .msg {
     max-width: 72%;
     padding: 12px 16px;
-    border-radius: 14px;
+    border-radius: 2px;
     line-height: 1.5;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .msg.user {
     align-self: flex-end;
-    background: #4c1d95;
-    color: #ede9fe;
-    border-bottom-right-radius: 4px;
+    background: #001a00;
+    color: #00ff00;
+    border: 1px solid #00aa00;
   }
 
   .msg.ai {
     align-self: flex-start;
-    background: #1e1e2e;
-    color: #e8e8f0;
-    border-bottom-left-radius: 4px;
+    background: #000800;
+    color: #00cc00;
+    border: 1px solid #004400;
   }
 
   .msg.system {
     align-self: center;
     background: transparent;
-    color: #6b7280;
-    font-size: 12px;
+    color: #005500;
+    font-size: 11px;
     padding: 4px 0;
   }
 
   #input-row {
     padding: 16px 24px;
-    border-top: 1px solid #1e1e2e;
+    border-top: 1px solid #003300;
     display: flex;
     gap: 10px;
   }
 
   #msg-input {
     flex: 1;
-    background: #1e1e2e;
-    border: 1px solid #2d2d3e;
-    border-radius: 10px;
-    color: #e8e8f0;
+    background: #000800;
+    border: 1px solid #004400;
+    border-radius: 2px;
+    color: #00ff00;
     padding: 10px 14px;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
     outline: none;
     transition: border-color 0.15s;
   }
 
-  #msg-input:focus { border-color: #7c3aed; }
+  #msg-input:focus { border-color: #00ff00; }
+  #msg-input::placeholder { color: #004400; }
 
   #send-btn {
-    background: #7c3aed;
-    color: white;
-    border: none;
-    border-radius: 10px;
+    background: #002200;
+    color: #00ff00;
+    border: 1px solid #00ff00;
+    border-radius: 2px;
     padding: 10px 20px;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
     cursor: pointer;
     transition: background 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  #send-btn:hover { background: #6d28d9; }
-  #send-btn:disabled { background: #374151; cursor: not-allowed; }
+  #send-btn:hover { background: #003300; }
+  #send-btn:disabled { background: #001100; color: #004400; border-color: #004400; cursor: not-allowed; }
 
   #mic-btn {
-    background: #7c3aed;
-    color: white;
-    border: none;
-    border-radius: 10px;
+    background: #002200;
+    color: #00ff00;
+    border: 1px solid #00ff00;
+    border-radius: 2px;
     padding: 10px 20px;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
     cursor: pointer;
     transition: background 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  #mic-btn:hover { background: #6d28d9; }
-  #mic-btn:disabled { background: #374151; cursor: not-allowed; }
+  #mic-btn:hover { background: #003300; }
+  #mic-btn:disabled { background: #001100; color: #004400; border-color: #004400; cursor: not-allowed; }
 
   #info-panel {
     width: 300px;
@@ -153,17 +167,19 @@
   }
 
   .card {
-    background: #1e1e2e;
-    border-radius: 12px;
+    background: #000800;
+    border-radius: 2px;
+    border: 1px solid #003300;
     padding: 14px;
   }
 
   .card h3 {
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #6b7280;
+    letter-spacing: 0.12em;
+    color: #006600;
     margin-bottom: 10px;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .stat-row {
@@ -171,29 +187,31 @@
     justify-content: space-between;
     align-items: center;
     padding: 4px 0;
-    font-size: 13px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
   }
 
-  .stat-label { color: #9ca3af; }
-  .stat-value { color: #e8e8f0; font-weight: 500; }
-  .stat-value.warn { color: #f87171; }
-  .stat-value.ok { color: #4ade80; }
+  .stat-label { color: #006600; }
+  .stat-value { color: #00cc00; font-weight: 500; }
+  .stat-value.warn { color: #ffaa00; }
+  .stat-value.ok { color: #00ff00; }
 
   .emotion-tag {
     display: inline-block;
-    padding: 3px 10px;
-    border-radius: 99px;
-    font-size: 12px;
-    background: #2d1b69;
-    color: #c4b5fd;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    background: #001a00;
+    color: #00ff00;
+    border: 1px solid #00aa00;
     margin-top: 4px;
   }
 
-  /* Login overlay */
   #login-overlay {
     position: fixed;
     inset: 0;
-    background: #0f0f13;
+    background: #000000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -201,8 +219,9 @@
   }
 
   #login-box {
-    background: #1e1e2e;
-    border-radius: 16px;
+    background: #000800;
+    border: 1px solid #00ff00;
+    border-radius: 2px;
     padding: 36px;
     width: 360px;
     display: flex;
@@ -211,18 +230,22 @@
   }
 
   #login-box h2 {
-    font-size: 22px;
-    color: #a78bfa;
+    font-size: 20px;
+    color: #00ff00;
     font-weight: 700;
     text-align: center;
     margin-bottom: 4px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   #login-box p {
-    font-size: 13px;
-    color: #6b7280;
+    font-size: 11px;
+    color: #006600;
     text-align: center;
     margin-top: -8px;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .field {
@@ -231,47 +254,60 @@
     gap: 6px;
   }
 
-  .field label { font-size: 12px; color: #9ca3af; }
+  .field label {
+    font-size: 11px;
+    color: #006600;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
 
   .field input {
-    background: #0f0f13;
-    border: 1px solid #2d2d3e;
-    border-radius: 8px;
-    color: #e8e8f0;
+    background: #000000;
+    border: 1px solid #004400;
+    border-radius: 2px;
+    color: #00ff00;
     padding: 10px 12px;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
     outline: none;
   }
 
-  .field input:focus { border-color: #7c3aed; }
+  .field input:focus { border-color: #00ff00; }
+  .field input::placeholder { color: #003300; }
 
   #login-btn {
-    background: #7c3aed;
-    color: white;
-    border: none;
-    border-radius: 10px;
+    background: #002200;
+    color: #00ff00;
+    border: 1px solid #00ff00;
+    border-radius: 2px;
     padding: 12px;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
     transition: background 0.15s;
   }
 
-  #login-btn:hover { background: #6d28d9; }
+  #login-btn:hover { background: #003300; }
 
   #skip-btn {
     background: transparent;
-    color: #6b7280;
+    color: #006600;
     border: none;
-    font-size: 13px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
     cursor: pointer;
     text-decoration: underline;
     text-align: center;
   }
 
   #login-error {
-    color: #f87171;
-    font-size: 12px;
+    color: #ff4400;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
     text-align: center;
     display: none;
   }
@@ -279,7 +315,6 @@
 </head>
 <body>
 
-<!-- Login Overlay -->
 <div id="login-overlay">
   <div id="login-box">
     <h2>SphereAI</h2>
@@ -298,10 +333,9 @@
   </div>
 </div>
 
-<!-- Main UI -->
 <header>
   <h1>SphereAI</h1>
-  <span id="status-badge">—</span>
+  <span id="status-badge">offline</span>
 </header>
 
 <main>
@@ -317,33 +351,33 @@
   <div id="info-panel">
     <div class="card" id="lang-card">
       <h3>Language</h3>
-      <div class="stat-row"><span class="stat-label">Intent</span><span class="stat-value" id="i-intent">—</span></div>
-      <div class="stat-row"><span class="stat-label">Confidence</span><span class="stat-value" id="i-conf">—</span></div>
-      <div class="stat-row"><span class="stat-label">Emotion</span><span id="i-emotion">—</span></div>
+      <div class="stat-row"><span class="stat-label">Intent</span><span class="stat-value" id="i-intent">--</span></div>
+      <div class="stat-row"><span class="stat-label">Confidence</span><span class="stat-value" id="i-conf">--</span></div>
+      <div class="stat-row"><span class="stat-label">Emotion</span><span id="i-emotion">--</span></div>
     </div>
 
     <div class="card">
       <h3>Emotional State</h3>
-      <div class="stat-row"><span class="stat-label">State</span><span class="stat-value" id="e-label">—</span></div>
-      <div class="stat-row"><span class="stat-label">Alert</span><span class="stat-value" id="e-alert">—</span></div>
-      <div class="stat-row"><span class="stat-label">Arousal</span><span class="stat-value" id="e-arousal">—</span></div>
-      <div class="stat-row"><span class="stat-label">Valence</span><span class="stat-value" id="e-valence">—</span></div>
-      <div class="stat-row"><span class="stat-label">Convergence</span><span class="stat-value" id="e-convergence">—</span></div>
+      <div class="stat-row"><span class="stat-label">State</span><span class="stat-value" id="e-label">--</span></div>
+      <div class="stat-row"><span class="stat-label">Alert</span><span class="stat-value" id="e-alert">--</span></div>
+      <div class="stat-row"><span class="stat-label">Arousal</span><span class="stat-value" id="e-arousal">--</span></div>
+      <div class="stat-row"><span class="stat-label">Valence</span><span class="stat-value" id="e-valence">--</span></div>
+      <div class="stat-row"><span class="stat-label">Convergence</span><span class="stat-value" id="e-convergence">--</span></div>
     </div>
 
     <div class="card">
       <h3>Biology</h3>
-      <div class="stat-row"><span class="stat-label">Heart Rate</span><span class="stat-value" id="b-hr">—</span></div>
-      <div class="stat-row"><span class="stat-label">SpO2</span><span class="stat-value" id="b-spo2">—</span></div>
-      <div class="stat-row"><span class="stat-label">Temperature</span><span class="stat-value" id="b-temp">—</span></div>
-      <div class="stat-row"><span class="stat-label">Activity</span><span class="stat-value" id="b-activity">—</span></div>
-      <div class="stat-row"><span class="stat-label">Stress Flags</span><span class="stat-value" id="b-stress">—</span></div>
-      <div class="stat-row"><span class="stat-label">Source</span><span class="stat-value" id="b-source">—</span></div>
+      <div class="stat-row"><span class="stat-label">Heart Rate</span><span class="stat-value" id="b-hr">--</span></div>
+      <div class="stat-row"><span class="stat-label">SpO2</span><span class="stat-value" id="b-spo2">--</span></div>
+      <div class="stat-row"><span class="stat-label">Temperature</span><span class="stat-value" id="b-temp">--</span></div>
+      <div class="stat-row"><span class="stat-label">Activity</span><span class="stat-value" id="b-activity">--</span></div>
+      <div class="stat-row"><span class="stat-label">Stress Flags</span><span class="stat-value" id="b-stress">--</span></div>
+      <div class="stat-row"><span class="stat-label">Source</span><span class="stat-value" id="b-source">--</span></div>
     </div>
 
     <div class="card">
       <h3>Context</h3>
-      <p id="i-context" style="font-size:12px;color:#9ca3af;line-height:1.5;">—</p>
+      <p id="i-context" style="font-size:11px;color:#006600;line-height:1.6;">--</p>
     </div>
   </div>
 </main>
@@ -357,45 +391,51 @@
 
   function addMessage(text, role) {
     const div = document.createElement('div');
-    div.className = `msg ${role}`;
+    div.className = 'msg ' + role;
     div.textContent = text;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
   }
 
   function updateInfo(data) {
-    document.getElementById('i-intent').textContent = data.intent || '—';
-    document.getElementById('i-conf').textContent = data.confidence != null ? `${(data.confidence * 100).toFixed(0)}%` : '—';
+    document.getElementById('i-intent').textContent = data.intent || '--';
+    document.getElementById('i-conf').textContent = data.confidence != null ? ((data.confidence * 100).toFixed(0) + '%') : '--';
 
     const emotionEl = document.getElementById('i-emotion');
+    while (emotionEl.firstChild) emotionEl.removeChild(emotionEl.firstChild);
     if (data.emotion) {
-      emotionEl.innerHTML = `<span class="emotion-tag">${data.emotion}</span>`;
+      const tag = document.createElement('span');
+      tag.className = 'emotion-tag';
+      tag.textContent = data.emotion;
+      emotionEl.appendChild(tag);
     } else {
-      emotionEl.textContent = '—';
+      emotionEl.textContent = '--';
     }
 
-    document.getElementById('i-context').textContent = data.emotional_context || '—';
+    document.getElementById('i-context').textContent = data.emotional_context || '--';
 
     const es = data.emotional_state;
     if (es) {
       document.getElementById('e-label').textContent = es.label.replace(/_/g, ' ');
       const alertEl = document.getElementById('e-alert');
       alertEl.textContent = es.alert_level;
-      alertEl.className = `stat-value ${es.alert_level === 'high' ? 'warn' : es.alert_level === 'none' ? 'ok' : ''}`;
+      alertEl.className = 'stat-value ' + (es.alert_level === 'high' ? 'warn' : es.alert_level === 'none' ? 'ok' : '');
       document.getElementById('e-arousal').textContent = es.arousal.toFixed(2);
       document.getElementById('e-valence').textContent = es.valence.toFixed(2);
-      document.getElementById('e-convergence').textContent = `${es.convergence}/3`;
+      document.getElementById('e-convergence').textContent = es.convergence + '/3';
     }
 
     const b = data.biology;
     if (b) {
-      document.getElementById('b-hr').className = `stat-value ${b.heart_rate_elevated ? 'warn' : 'ok'}`;
-      document.getElementById('b-hr').textContent = `${b.heart_rate} bpm${b.heart_rate_elevated ? ' ⚠' : ''}`;
+      const hrEl = document.getElementById('b-hr');
+      hrEl.className = 'stat-value ' + (b.heart_rate_elevated ? 'warn' : 'ok');
+      hrEl.textContent = b.heart_rate + ' bpm' + (b.heart_rate_elevated ? ' !' : '');
 
-      document.getElementById('b-spo2').className = `stat-value ${b.spo2_low ? 'warn' : 'ok'}`;
-      document.getElementById('b-spo2').textContent = `${b.spo2}%${b.spo2_low ? ' ⚠' : ''}`;
+      const spo2El = document.getElementById('b-spo2');
+      spo2El.className = 'stat-value ' + (b.spo2_low ? 'warn' : 'ok');
+      spo2El.textContent = b.spo2 + '%' + (b.spo2_low ? ' !' : '');
 
-      document.getElementById('b-temp').textContent = `${b.temperature}°C`;
+      document.getElementById('b-temp').textContent = b.temperature + 'C';
       document.getElementById('b-activity').textContent = b.activity_level;
       document.getElementById('b-stress').textContent = b.stress_indicators;
       document.getElementById('b-source').textContent = b.source;
@@ -436,9 +476,9 @@
   }
 
   sendBtn.addEventListener('click', sendMessage);
-  msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+  msgInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') sendMessage(); });
 
-  document.getElementById('mic-btn').addEventListener('click', async () => {
+  document.getElementById('mic-btn').addEventListener('click', async function() {
     const btn = document.getElementById('mic-btn');
     btn.disabled = true;
     btn.textContent = 'Listening...';
@@ -458,8 +498,7 @@
     btn.textContent = 'Mic';
   });
 
-  // Login
-  document.getElementById('login-btn').addEventListener('click', async () => {
+  document.getElementById('login-btn').addEventListener('click', async function() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
     const errEl = document.getElementById('login-error');
@@ -468,12 +507,12 @@
     const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email, password: password }),
     });
     const data = await res.json();
     if (data.ok) {
       overlay.style.display = 'none';
-      statusBadge.textContent = 'Live';
+      statusBadge.textContent = 'live';
       statusBadge.className = 'live';
       addMessage('Connected to Firebase. Live vitals active.', 'system');
     } else {
@@ -482,10 +521,10 @@
     }
   });
 
-  document.getElementById('skip-btn').addEventListener('click', async () => {
+  document.getElementById('skip-btn').addEventListener('click', async function() {
     await fetch('/api/skip_login', { method: 'POST' });
     overlay.style.display = 'none';
-    statusBadge.textContent = 'Mock mode';
+    statusBadge.textContent = 'mock';
     statusBadge.className = 'mock';
     addMessage('Running in mock mode. Sign in for live vitals.', 'system');
   });

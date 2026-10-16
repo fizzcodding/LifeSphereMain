@@ -1,6 +1,6 @@
 SPHEREAI CONTEXT FOR AGENTS
 ============================
-Updated: 2026-09-18
+Updated: 2026-10-10
 
 PROJECT
 -------
@@ -15,8 +15,6 @@ emotional state and respond like a compassionate therapist. It never directly co
 hardware. All hardware actions are structured events routed through SphereCore (Flutter
 app) via Firebase.
 
-DEADLINE: Flight Sep 30 2026. Demo Oct 2 2026. Prototype must freeze before flight.
-
 PIPELINE (fully implemented and working)
 -----------------------------------------
 text -> LanguageAgent -> BiologyAgent -> VoiceAgent(mock) -> EmotionalFusion
@@ -24,137 +22,61 @@ text -> LanguageAgent -> BiologyAgent -> VoiceAgent(mock) -> EmotionalFusion
 
 INTERFACES
 ----------
-CLI:  python main.py                          (Firebase login prompt, auto-saves creds to .env)
-Web:  python web_demo/app.py                  (localhost:5050, terminal aesthetic UI)
-Test: venv/bin/python -m pytest tests/        (14 passing, no network required)
+CLI:  python main.py                          (reads FIREBASE_EMAIL from .env, getpass prompt if absent)
+Web:  python web_demo/app.py                  (127.0.0.1:5050, terminal aesthetic UI, debug=False)
+Test: venv/bin/pytest tests/                  (37 passing in test_agents.py + 6 in test_voice_real.py)
 
-ARCHITECTURE RULES
-------------------
-1. SphereAI never controls hardware directly. Emits structured action dicts only.
-2. Agents are perception-only. LanguageAgent/BiologyAgent/VoiceAgent do NOT generate replies.
-3. EmotionalAgent is the ONLY layer that makes psychological interpretations.
-4. ResponseAgent generates the reply using EmotionalState + LanguageResult.
-5. BiologyAgent uses deterministic threshold logic only. No LLM.
-6. All Gemini calls go through core/gemini.py which auto-retries all fallback models on 503.
+SECURITY
+--------
+Credentials: Never saved to .env by the app. Set FIREBASE_EMAIL and FIREBASE_WEB_API_KEY
+  in .env manually. Password is prompted via getpass each session.
+Session cookies: HTTPONLY=True, SAMESITE=Lax.
+Input: All user text wrapped in <USER_INPUT> delimiters before LLM calls.
+Response action: Built deterministically from lang_result.intent, never from LLM output.
+Crisis override: Deterministic keyword + emotion check in core/crisis.py triggers warm
+  crisis response and write_alert to Firebase regardless of emotional label.
 
-FILES
------
-main.py                     CLI entrypoint, full pipeline loop, Firebase login + credential save
-config.py                   GEMINI_API_KEY and GEMINI_MODELS list loaded from .env
-.env                        GEMINI_API_KEY, GEMINI_MODEL + 3 fallbacks, FIREBASE_EMAIL, FIREBASE_PASSWORD
+INTENTS (enforced set - do not add new ones without updating LanguageAgent)
+----------------------------------------------------------------------------
+emotional_support, get_vitals, medication_reminder, list_reminders,
+navigate, greeting, general_query, unknown
 
-agents/
-  language_agent.py         LanguageAgent -> LanguageResult(intent, emotion, emotional_context, entities, raw_text)
-  biology_agent.py          BiologyAgent -> BiologyResult + VitalSigns dataclass + mock_vitals()
-  voice_agent.py            VoiceAgent STUB -> VoiceResult + mock_voice() [hardware pending]
-  emotional_agent.py        EmotionalAgent -> EmotionalState(label, alert_level, needs_support, confidence)
-  response_agent.py         ResponseAgent(LanguageResult, EmotionalState) -> ResponseResult(reply, action)
+ENV VARS REQUIRED
+-----------------
+GEMINI_API_KEY          - Gemini API key
+GEMINI_MODEL            - primary model (e.g. gemini-2.0-flash)
+GEMINI_FALLBACK         - first fallback
+GEMINI_FALLBACKS        - second fallback
+GEMINI_FALLBACKT        - third fallback
+FIREBASE_EMAIL          - Firebase account email for SphereAI
+FIREBASE_WEB_API_KEY    - Firebase project web API key
+CRISIS_EMERGENCY_NUMBER - emergency number shown in crisis response (default: 999)
 
-fusion/
-  emotional_fusion.py       EmotionalFusion -> FusedState(arousal, valence, convergence)
-                            Weights: language 55%, biology 30%, voice 15%
+NEW FILES SINCE LAST UPDATE
+----------------------------
+core/crisis.py          - deterministic crisis detection (keywords + emotion)
+core/reminder_utils.py  - infer_slot(), validate_reminder() (deduped from main.py and app.py)
 
-core/
-  gemini.py                 Shared generate() with automatic fallback across all configured models
-  spherecore_client.py      Firebase REST: authenticate(), get_vitals(), add_reminder(), write_ai_suggestions()
+BIOLOGY NOTES
+-------------
+VitalSigns.heart_rate, spo2, skin_temperature are all Optional[float].
+None means unknown/unavailable - never flagged, never faked.
+skin_temperature range for wrist MLX90614: 31.0 to 35.5 C.
+mock_vitals() uses skin_temperature=34.2 (in wrist range).
+spo2_low only fires when spo2 is a positive non-None float.
+bio-critical override: HR > 130 or SpO2 < 90 forces arousal >= 0.7
+  and convergence >= 2 in EmotionalFusion, and alert_level >= medium
+  in EmotionalAgent, regardless of language signal.
 
-web_demo/
-  app.py                    Flask port 5050: /api/login  /api/skip_login  /api/chat
-  index.html                Frontend UI (terminal aesthetic, green-on-black, JetBrains Mono)
+VITALS FROM FIREBASE
+--------------------
+get_vitals() does ONE GET on vital32/ node (not 4 sequential requests).
+Stale data rejection: if status/server_ts is older than 30s, returns None.
+On 401: re-authenticates once and retries.
+write_alert(level, label, message) writes to users/{uid}/alerts.
 
-tests/
-  test_agents.py            14 pytest tests covering BiologyAgent, VoiceAgent, EmotionalFusion, EmotionalAgent
-
-DATA CONTRACTS
---------------
-LanguageResult:   intent(constrained to 7 values), emotion, emotional_context, confidence, entities, raw_text
-VitalSigns:       heart_rate, spo2, skin_temperature, activity(0.0-1.0 normalized)
-BiologyResult:    vitals, heart_rate_elevated, spo2_low, temperature_abnormal, activity_level, stress_indicators, source
-VoiceResult:      pitch_mean, energy, speaking_rate, tremor, long_pauses, source
-FusedState:       arousal(0-1), valence(-1 to 1), convergence(0-3), dominant_emotion, emotional_context
-EmotionalState:   label, arousal, valence, convergence, confidence, needs_support, alert_level
-ResponseResult:   reply(str), action(dict or None)
-
-INTENT VOCABULARY (constrained — for SphereCore routing)
----------------------------------------------------------
-emotional_support | get_vitals | medication_reminder | navigate | greeting | general_query | unknown
-
-EMOTIONAL STATE LABELS
-----------------------
-calm | engaged | low_mood | mild_distress | acute_distress | elevated_anxiety
-alert_level: none | low | medium | high
-
-FIREBASE PATHS (users/{uid}/...)
----------------------------------
-vital32/hr/currently          heart rate (int)
-vital32/spo2/currently        SpO2 (int)
-vital32/temp/currently        temperature (float)
-vital32/steps/currently       steps (int) -> normalized to activity by dividing by 10000
-vital32/aiSuggestions/        SphereAI writes 3 tips here, Flutter reads and displays
-reminders/                    SphereAI pushes medication reminders here
-profile/                      name, birthDate, phonetag
-
-REMINDER SCHEMA (must match Flutter MedicineReminder freezed model)
---------------------------------------------------------------------
-{ "name": str, "slot": "morning"|"afternoon"|"evening", "time": "HH:MM", "days": [str], "note": str|null }
-
-GEMINI FALLBACK ORDER
----------------------
-gemini-3.5-flash -> gemini-3.7-flash -> gemini-2.5-flash -> gemini-3.0-flash
-Controlled by: GEMINI_MODEL, GEMINI_FALLBACK, GEMINI_FALLBACKS, GEMINI_FALLBACKT in .env
-All agents use core/gemini.py generate() — never call the Gemini client directly.
-
-NOT DONE YET
-------------
-- VoiceAgent real implementation (needs microphone hardware + librosa for feature extraction)
-- Hardware integration (ESP32 firmware, physical sensors, serial bridge)
-- SphereCore event routing (action dicts currently printed/logged, not POSTed to SphereCore API yet)
-- Emotional model training pipeline (classifier/train/ directory scaffolded but empty)
-- Web UI terminal aesthetic redesign (index.html currently has a generic dark theme, redesign pending)
-
-WHAT NOT TO DO
---------------
-- Do not add databases, Docker, microservices, or message queues
-- Do not make SphereAI control hardware directly
-- Do not put reply generation in LanguageAgent (it is perception only)
-- Do not invent new intent values outside the constrained vocabulary
-- Do not break the fallback model chain in core/gemini.py
-
-ESP32-S3 AUDIO BRIDGE (Prompt 2)
----------------------------------
-SPHEREAI_AUDIO env var: "laptop" (default) uses sounddevice mic + pyttsx3 speaker on the host.
-                         "esp"    routes all audio through the ESP32-S3 over USB serial.
-
-ESP_AUDIO_PORT:  override serial port (e.g. /dev/ttyACM0). Auto-detected from VIDs 303A/10C4/1A86
-                 when exactly one matching port is present. Required if multiple ESP boards attached.
-ESP_MIC_GAIN:    float multiplier applied to raw mic samples after DC removal (default 1.0).
-                 Raise to 4 or 8 if mic is very quiet.
-ESP_SPK_VOLUME:  float 0–1 applied before PCM encoding sent to speaker (default 0.8).
-
-SERIAL PROTOCOL (921600 baud, USB CDC)
-  Host sends  ->  Device replies
-  PING        ->  PONG
-  REC <ms>    ->  AUD <nbytes>, then nbytes PCM (16 kHz 16-bit LE mono), then OK
-  PLAY <n>    ->  RDY, host sends n bytes in <=1024 chunks, device acks each with "K", ends DONE
-  (idle)      ->  EVT BTN  (debounced BOOT button press on GPIO 0)
-
-PIN ASSIGNMENTS (INMP441 mic / MAX98357A amp, confirmed wired)
-  PIN_MIC_BCLK=5  PIN_MIC_WS=4  PIN_MIC_DIN=6  (I2S_NUM_1, left channel, L/R tied to GND)
-  PIN_AMP_BCLK=15 PIN_AMP_LRC=16 PIN_AMP_DIN=7  (I2S_NUM_0, stereo frame, L=R)
-  PIN_BTN=0       (BOOT button, active low, INPUT_PULLUP, 250 ms debounce)
-  To change any pin: edit only firmware/sphereai_audio/config.h
-
-NEW FILES ADDED
-  core/esp_audio.py              EspAudio class + find_port + use_esp + get_esp singleton
-  core/speech.py                 speak(text) + speak_blocking(text), routes to ESP or local pyttsx3
-  hardware/esp_selftest.py       4-step hardware health check (play beep, record, playback, features)
-  firmware/sphereai_audio/config.h          Pin and format constants for the ESP32-S3 sketch
-  firmware/sphereai_audio/sphereai_audio.ino  Arduino sketch (legacy driver/i2s.h API)
-  tests/test_esp_audio.py        9 pty-based unit tests, no hardware required
-  tests/test_voice_real.py       10 offline unit tests for VoiceAgent listen/to_wav_bytes/analyze_signal
-
-UPDATED NOT DONE YET
-- VoiceAgent real microphone: implemented, routes to ESP or sounddevice, pending hardware verification
-- ESP32-S3 audio firmware: written (firmware/sphereai_audio/), compiled (esp32:esp32 2.0.0), NOT yet
-  flashed or hardware-verified (no board detected during build session). Pending: flash, selftest,
-  real mic quality, real speaker output, and button confirmation.
+KNOWN LIMITATIONS
+-----------------
+- Voice agent is mock only (real mic path not implemented for hardware)
+- Gemini calls have no hard wall-clock timeout (SDK does not expose one directly)
+- Firebase idToken expires after ~1h; SphereCoreClient.authenticate() re-runs on expiry

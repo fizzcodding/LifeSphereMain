@@ -48,6 +48,7 @@ import xgboost as xgb
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 FEATURE_COLUMNS = [
+    'chronological_age',
     'heart_rate',
     'spo2',
     'skin_temp_C',
@@ -128,7 +129,7 @@ def _generate_synthetic_bio_age_data(
     bio_age = np.clip(bio_age, 40.0, 110.0)
 
     X = np.column_stack([
-        heart_rate, spo2, skin_temp_C, hrv_rmssd, hrv_lf_hf,
+        chron_age, heart_rate, spo2, skin_temp_C, hrv_rmssd, hrv_lf_hf,
         accel_mag, gsr_uS, ambient_temp, humidity, pressure, gas_resistance,
     ]).astype(np.float32)
     y = bio_age.astype(np.float32)
@@ -229,11 +230,11 @@ def main():
     print('--- Inference examples ---')
     profiles = [
         ('Age 65, healthy (HR=65, SpO2=98, RMSSD=55, low GSR)',
-         [65.0, 98.0, 36.4, 55.0, 1.2, 10.8, 0.2, 24.0, 55.0, 1013.0, 85000.0]),
+         [65.0, 65.0, 98.0, 36.4, 55.0, 1.2, 10.8, 0.2, 24.0, 55.0, 1013.0, 85000.0]),
         ('Age 72, sedentary, high HR (HR=85, SpO2=96, RMSSD=25, high GSR)',
-         [85.0, 96.0, 36.7, 25.0, 2.1, 9.9, 0.9, 24.0, 55.0, 1013.0, 60000.0]),
+         [72.0, 85.0, 96.0, 36.7, 25.0, 2.1, 9.9, 0.9, 24.0, 55.0, 1013.0, 60000.0]),
         ('Age 78, severe deconditioning (HR=92, SpO2=94, RMSSD=12)',
-         [92.0, 94.0, 37.1, 12.0, 3.2, 9.85, 1.5, 24.0, 55.0, 1013.0, 45000.0]),
+         [78.0, 92.0, 94.0, 37.1, 12.0, 3.2, 9.85, 1.5, 24.0, 55.0, 1013.0, 45000.0]),
     ]
 
     for label, features in profiles:
@@ -246,6 +247,11 @@ def main():
     print()
     print('DEPLOYMENT REQUIREMENT: Retrain with validated biological age labels.')
     print('PIPELINE POSITION: Daily update cycle (see Firebase schema: bio_age).')
+    print()
+    print('NOTE: Run this script to retrain models after adding chronological_age feature.')
+    print('      Saved .joblib files trained without chronological_age have 11 features.')
+    print('      This code now generates 12 features. Old models are incompatible.')
+    print('      Re-run: python pipeline/models/train_bio_age_estimator.py')
 
 
 if __name__ == '__main__':

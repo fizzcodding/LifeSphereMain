@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 from agents.language_agent import LanguageResult
 from agents.biology_agent import BiologyResult
@@ -7,29 +7,14 @@ from agents.voice_agent import VoiceResult
 
 @dataclass
 class FusedState:
-    # Physiological arousal signal 0.0–1.0
-    # High = body is activated (elevated HR, low SpO2, tremor, high energy)
     arousal: float
-
-    # Emotional valence signal -1.0 to 1.0
-    # Negative = distress/negative affect, Positive = calm/positive affect
     valence: float
-
-    # How many independent modalities agree something is wrong
-    # 0 = all clear, 3 = all three modalities flagging distress
     convergence: int
-
-    # Dominant emotion label from language (most reliable single label)
     dominant_emotion: Optional[str]
-
-    # Rich narrative context from language agent
     emotional_context: str
-
-    # Whether biology is from real hardware or mock
     biology_source: str
-
-    # Whether voice is from real hardware or mock
     voice_source: str
+    bio_critical: bool = False
 
 
 _NEGATIVE_EMOTIONS = {
@@ -43,6 +28,35 @@ _POSITIVE_EMOTIONS = {
     "gratitude", "hope", "excitement", "love", "pride",
 }
 
+_LANGUAGE_AROUSAL_TABLE = {
+    "anxiety": 0.7,
+    "panic": 0.8,
+    "anger": 0.75,
+    "fear": 0.7,
+    "excitement": 0.65,
+    "sadness": 0.3,
+    "grief": 0.3,
+    "loneliness": 0.25,
+    "depression": 0.2,
+    "hopelessness": 0.2,
+    "calm": 0.05,
+    "contentment": 0.05,
+    "relief": 0.1,
+    "joy": 0.15,
+    "gratitude": 0.1,
+    "stress": 0.65,
+    "frustration": 0.6,
+    "worry": 0.55,
+    "distress": 0.65,
+    "despair": 0.35,
+    "shame": 0.4,
+    "guilt": 0.35,
+    "happiness": 0.2,
+    "hope": 0.15,
+    "love": 0.1,
+    "pride": 0.2,
+}
+
 
 def _language_valence(lang: LanguageResult) -> float:
     emotion = (lang.emotion or "").lower()
@@ -53,6 +67,13 @@ def _language_valence(lang: LanguageResult) -> float:
     return 0.0
 
 
+def _language_arousal(lang: LanguageResult) -> float:
+    emotion_key = (lang.emotion or "").lower()
+    lang_valence = _language_valence(lang)
+    base = _LANGUAGE_AROUSAL_TABLE.get(emotion_key, abs(lang_valence))
+    return base * lang.confidence
+
+
 def _biology_arousal(bio: BiologyResult) -> float:
     score = 0.0
     if bio.heart_rate_elevated:
@@ -61,7 +82,6 @@ def _biology_arousal(bio: BiologyResult) -> float:
         score += 0.35
     if bio.temperature_abnormal:
         score += 0.15
-    # High activity raises arousal but is not inherently distress
     if bio.activity_level == "active":
         score += 0.1
     return min(score, 1.0)
@@ -93,17 +113,6 @@ def _voice_valence(voice: VoiceResult) -> float:
 
 
 class EmotionalFusion:
-    """
-    Combines LanguageResult, BiologyResult, and VoiceResult into
-    a single FusedState. Does not make emotional decisions —
-    that is EmotionalAgent's job. This layer only combines signals.
-
-    Weights reflect confidence hierarchy:
-    - Language carries most weight (LLM semantic understanding)
-    - Biology is objective but indirect
-    - Voice adds prosodic signal (currently mock)
-    """
-
     LANGUAGE_WEIGHT = 0.55
     BIOLOGY_WEIGHT = 0.30
     VOICE_WEIGHT = 0.15
@@ -115,22 +124,22 @@ class EmotionalFusion:
         voice: VoiceResult,
     ) -> FusedState:
         lang_valence = _language_valence(lang)
+        lang_arousal = _language_arousal(lang)
         bio_arousal = _biology_arousal(bio)
         voice_arousal = _voice_arousal(voice)
         voice_valence = _voice_valence(voice)
 
         arousal = (
-            bio_arousal * self.BIOLOGY_WEIGHT +
-            voice_arousal * self.VOICE_WEIGHT +
-            abs(lang_valence) * self.LANGUAGE_WEIGHT
+            bio_arousal * self.BIOLOGY_WEIGHT
+            + voice_arousal * self.VOICE_WEIGHT
+            + lang_arousal * self.LANGUAGE_WEIGHT
         )
 
         valence = (
-            lang_valence * self.LANGUAGE_WEIGHT +
-            voice_valence * (self.VOICE_WEIGHT + self.BIOLOGY_WEIGHT)
+            lang_valence * self.LANGUAGE_WEIGHT
+            + voice_valence * (self.VOICE_WEIGHT + self.BIOLOGY_WEIGHT)
         )
 
-        # Convergence: count how many modalities independently signal distress
         convergence = 0
         if lang_valence < -0.3:
             convergence += 1
@@ -138,6 +147,22 @@ class EmotionalFusion:
             convergence += 1
         if voice_arousal > 0.3 or voice_valence < -0.2:
             convergence += 1
+
+        hr_critical = (
+            bio.heart_rate_elevated
+            and bio.vitals.heart_rate is not None
+            and bio.vitals.heart_rate > 130
+        )
+        spo2_critical = (
+            bio.spo2_low
+            and bio.vitals.spo2 is not None
+            and bio.vitals.spo2 < 90
+        )
+        bio_critical = hr_critical or spo2_critical
+
+        if bio_critical:
+            arousal = max(arousal, 0.7)
+            convergence = max(convergence, 2)
 
         return FusedState(
             arousal=round(min(max(arousal, 0.0), 1.0), 3),
@@ -147,4 +172,5 @@ class EmotionalFusion:
             emotional_context=lang.emotional_context,
             biology_source=bio.source,
             voice_source=voice.source,
+            bio_critical=bio_critical,
         )
