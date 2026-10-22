@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_services.dart';
@@ -9,10 +10,11 @@ class AppLogoTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset('assets/images/logo_main.png', height: 34);
+    return Image.asset('assets/images/logo_main.png', height: 30);
   }
 }
 
+// Translucent frosted-glass bottom navigation bar — Apple tab bar style
 class AppBottomNav extends StatelessWidget {
   final String currentRoute;
 
@@ -28,8 +30,8 @@ class AppBottomNav extends StatelessWidget {
   ];
 
   static const _icons = [
-    Icons.memory_rounded,
-    Icons.monitor_heart_rounded,
+    Icons.square_rounded,
+    Icons.favorite_rounded,
     Icons.tune_rounded,
     Icons.alarm_rounded,
     Icons.group_rounded,
@@ -37,8 +39,8 @@ class AppBottomNav extends StatelessWidget {
   ];
 
   static const _labels = [
-    'Dashboard',
-    'Vital32',
+    'Devices',
+    'Vitals',
     'Control',
     'Reminders',
     'Members',
@@ -47,27 +49,89 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final idx = _routes.indexOf(currentRoute);
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        boxShadow: [AppTheme.softShadow],
+    final idx = _routes.indexOf(currentRoute).clamp(0, _routes.length - 1);
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.82),
+            border: Border(
+              top: BorderSide(
+                color: AppTheme.opaqueSeparator.withValues(alpha: 0.6),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 49 + bottomPad,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _routes.length; i++)
+                    Expanded(
+                      child: _NavItem(
+                        icon: _icons[i],
+                        label: _labels[i],
+                        selected: i == idx,
+                        onTap: () {
+                          final route = _routes[i];
+                          if (route != currentRoute) {
+                            Navigator.pushReplacementNamed(context, route);
+                          }
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-      child: SafeArea(
-        top: false,
-        child: BottomNavigationBar(
-          currentIndex: idx < 0 ? 0 : idx,
-          type: BottomNavigationBarType.fixed,
-          items: [
-            for (var i = 0; i < _icons.length; i++)
-              BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i]),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppTheme.accent : AppTheme.labelTertiary;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: color,
+                letterSpacing: 0.1,
+              ),
+            ),
           ],
-          onTap: (next) {
-            final route = _routes[next];
-            if (route != currentRoute) {
-              Navigator.pushReplacementNamed(context, route);
-            }
-          },
         ),
       ),
     );
@@ -80,13 +144,14 @@ class AppLogoutButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      tooltip: 'Logout',
-      icon: const Icon(Icons.logout_rounded),
+      tooltip: 'Sign Out',
+      icon: const Icon(Icons.logout_rounded, size: 20),
+      color: AppTheme.accent,
       onPressed: () async {
         await AuthService.logout();
         if (!context.mounted) return;
         Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
-        showSuccessToast('Logged out successfully.');
+        showSuccessToast('Signed out.');
       },
     );
   }
@@ -102,12 +167,46 @@ class AppUserAvatar extends StatelessWidget {
       message: email ?? 'Profile',
       child: IconButton(
         icon: const Icon(Icons.account_circle_rounded),
+        color: AppTheme.accent,
         onPressed: () => Navigator.pushReplacementNamed(context, '/profile'),
       ),
     );
   }
 }
 
+// Apple-style inset grouped card — white surface on grey background
+class AppleCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+
+  const AppleCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: AppTheme.sp16,
+      vertical: AppTheme.sp12,
+    ),
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.surface,
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        splashColor: AppTheme.accent.withValues(alpha: 0.06),
+        highlightColor: AppTheme.accent.withValues(alpha: 0.04),
+        child: Padding(padding: padding, child: child),
+      ),
+    );
+  }
+}
+
+// Deprecated alias kept for backward compat with existing screens
 class PremiumPanel extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -115,20 +214,36 @@ class PremiumPanel extends StatelessWidget {
   const PremiumPanel({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(20),
+    this.padding = const EdgeInsets.all(AppTheme.sp16),
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: [AppTheme.softShadow],
+    return AppleCard(padding: padding, child: child);
+  }
+}
+
+// Section header — iOS grouped table style ("DEVICES" above a group)
+class SectionHeader extends StatelessWidget {
+  final String title;
+
+  const SectionHeader(this.title, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppTheme.sp16, AppTheme.sp20, AppTheme.sp16, AppTheme.sp8,
       ),
-      child: child,
+      child: Text(
+        title.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w400,
+          letterSpacing: 0.07,
+          color: AppTheme.labelSecondary,
+        ),
+      ),
     );
   }
 }

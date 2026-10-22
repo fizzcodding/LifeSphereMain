@@ -1,11 +1,51 @@
 from dataclasses import dataclass
 from typing import Optional
 import json
+import random
 from core.gemini import generate
 from agents.language_agent import LanguageResult
 from agents.emotional_agent import EmotionalState
 
 _ACTION_INTENTS = frozenset({'get_vitals', 'navigate', 'medication_reminder', 'list_reminders'})
+
+_SAD_QUOTES = [
+    "Even the darkest night will end and the sun will rise. — Victor Hugo",
+    "The wound is the place where the Light enters you. — Rumi",
+    "Out of suffering have emerged the strongest souls. — Khalil Gibran",
+    "Stars can't shine without darkness.",
+    "Every storm runs out of rain.",
+    "You are not alone in this. You never were.",
+    "Rock bottom became the solid foundation on which I rebuilt my life. — J.K. Rowling",
+    "What we have once enjoyed we can never lose. All that we love deeply becomes a part of us. — Helen Keller",
+    "The only way out is through. — Robert Frost",
+    "In three words I can sum up everything I've learned about life: it goes on. — Robert Frost",
+    "The soul would have no rainbow if the eyes had no tears. — Native American proverb",
+    "Weeping may endure for a night, but joy cometh in the morning. — Psalm 30:5",
+    "Pain is inevitable. Suffering is optional. — Haruki Murakami",
+    "There is no greater agony than bearing an untold story inside you. — Maya Angelou",
+    "You don't have to be positive all the time. Having feelings doesn't make you a negative person. It makes you human. — Lori Deschene",
+    "You are allowed to be both a masterpiece and a work in progress simultaneously. — Sophia Bush",
+    "Grief is the price we pay for love. — Queen Elizabeth II",
+    "It's okay to not be okay.",
+    "After the rain, the sun will reappear. There is life. After the pain, the joy will still be here.",
+    "Hope is being able to see that there is light despite all of the darkness. — Desmond Tutu",
+    "Flowers grow back even after the harshest winters. You will too.",
+    "Sometimes you have to go through the worst to arrive at your best.",
+    "The sun himself is weak when he first rises, and gathers strength and courage as the day gets on. — Charles Dickens",
+    "Keep going. Everything you need will come to you at the perfect time.",
+    "You have survived 100% of your worst days. That's a perfect record.",
+    "This too shall pass.",
+    "Difficult roads often lead to beautiful destinations.",
+    "One small crack does not mean that you are broken. It means that you were put to the test and you didn't fall apart. — Linda Poindexter",
+    "Believe you can and you're halfway there. — Theodore Roosevelt",
+    "You are stronger than you think, braver than you feel, and more loved than you know.",
+]
+
+_DEEP_SAD_LABELS = frozenset({'acute_distress', 'mild_distress'})
+_DEEP_SAD_EMOTIONS = frozenset({
+    'grief', 'sadness', 'despair', 'hopelessness', 'sorrow', 'loneliness',
+    'heartbreak', 'emptiness', 'loss',
+})
 
 _TONE_GUIDE = {
     'calm':             'The person is calm. Be warm and present. Match their energy.',
@@ -15,6 +55,23 @@ _TONE_GUIDE = {
     'acute_distress':   'The person is in acute distress. This is your only priority. Drop everything else. Respond with deep warmth, presence, and zero clinical language. Do not offer solutions. Just hold space.',
     'elevated_anxiety': 'The person is anxious. Speak slowly and calmly. Validate their feelings without amplifying them. Ground them gently.',
 }
+
+
+def _gemini_quote(context: str) -> str:
+    prompt = (
+        'Write one original, short, heartfelt quote (1-2 sentences) to gently comfort and uplift '
+        'someone who is feeling very sad right now. '
+        'It should feel like something a wise, warm person would say — not a motivational poster. '
+        'Draw on this emotional context: ' + context + '\n\n'
+        'Return only the quote text, no attribution, no quotes around it, nothing else.'
+    )
+    try:
+        result = generate(prompt)
+        if isinstance(result, str) and len(result.strip()) > 10:
+            return result.strip()
+    except Exception:
+        pass
+    return ''
 
 
 @dataclass
@@ -92,5 +149,23 @@ class ResponseAgent:
             reply = '. '.join(sentences[:4]).strip()
             if not reply:
                 reply = 'I am here with you.'
+
+        dominant = (emotional_state.dominant_emotion or '').lower()
+        is_deeply_sad = (
+            emotional_state.label in _DEEP_SAD_LABELS
+            and emotional_state.valence <= -0.4
+            and (dominant in _DEEP_SAD_EMOTIONS or emotional_state.convergence >= 2)
+        )
+
+        if is_deeply_sad:
+            if random.random() < 0.35:
+                quote = _gemini_quote(lang_result.emotional_context)
+            else:
+                quote = ''
+
+            if not quote:
+                quote = random.choice(_SAD_QUOTES)
+
+            reply = f'{reply}\n\n"{quote}"'
 
         return ResponseResult(reply=reply, action=action)

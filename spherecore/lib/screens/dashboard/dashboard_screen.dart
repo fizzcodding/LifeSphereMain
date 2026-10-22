@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/virtual_pin.dart';
@@ -18,87 +19,142 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  void _showEditDialog(VirtualPin pin) {
+  void _showEditSheet(VirtualPin pin) {
     final labelCtrl = TextEditingController(text: pin.label);
-    final pinCtrl = TextEditingController(text: pin.pin.toString());
+    final pinCtrl   = TextEditingController(text: pin.pin.toString());
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit Virtual Pin'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: labelCtrl,
-              decoration: const InputDecoration(labelText: 'Label'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: pinCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Pin Number'),
-            ),
-          ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _GlassSheet(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: AppTheme.sp20,
+            right: AppTheme.sp20,
+            top: AppTheme.sp8,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + AppTheme.sp32,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppTheme.sp20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.opaqueSeparator,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Text(
+                'Edit Device',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: AppTheme.sp20),
+              TextField(
+                controller: labelCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Label'),
+              ),
+              const SizedBox(height: AppTheme.sp12),
+              TextField(
+                controller: pinCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Pin Number'),
+              ),
+              const SizedBox(height: AppTheme.sp24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: AppTheme.sp12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final label = labelCtrl.text.trim();
+                        final num   = int.tryParse(pinCtrl.text.trim());
+                        if (label.isEmpty || num == null) {
+                          showErrorToast('Invalid inputs.');
+                          return;
+                        }
+                        try {
+                          await DatabaseService.updatePinD(pin.id, label, num);
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          showSuccessToast('Saved.');
+                        } catch (_) {
+                          showErrorToast('Could not save.');
+                        }
+                      },
+                      child: const Text('Save'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final label = labelCtrl.text.trim();
-              final num = int.tryParse(pinCtrl.text.trim());
-              if (label.isEmpty || num == null) {
-                showErrorToast('Invalid inputs.');
-                return;
-              }
-              try {
-                await DatabaseService.updatePinD(pin.id, label, num);
-                if (ctx.mounted) Navigator.pop(ctx);
-                showSuccessToast('Pin updated.');
-              } catch (_) {
-                showErrorToast('Failed to update.');
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
 
-  void _showMoreOptions(VirtualPin pin) {
+  void _showActionsSheet(VirtualPin pin) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheet) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
+      backgroundColor: Colors.transparent,
+      builder: (sheet) => _GlassSheet(
+        child: SafeArea(
+          top: false,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                leading: const Icon(Icons.edit_rounded, color: AppTheme.secondary),
-                title: const Text('Edit'),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.sp16,
+                  vertical: AppTheme.sp8,
+                ),
+                child: Text(
+                  pin.label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.labelSecondary,
+                    letterSpacing: 0.07,
+                  ),
+                ),
+              ),
+              const Divider(height: 0.5),
+              _SheetAction(
+                icon: Icons.edit_rounded,
+                label: 'Edit',
                 onTap: () {
                   Navigator.pop(sheet);
-                  _showEditDialog(pin);
+                  _showEditSheet(pin);
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.delete_rounded, color: AppTheme.danger),
-                title: const Text('Delete'),
+              const Divider(height: 0.5, indent: _sp56),
+              _SheetAction(
+                icon: Icons.delete_rounded,
+                label: 'Delete',
+                destructive: true,
                 onTap: () async {
                   Navigator.pop(sheet);
                   await DatabaseService.deletePin(pin.id);
-                  showSuccessToast('Pin deleted.');
+                  showSuccessToast('Deleted.');
                 },
               ),
+              const SizedBox(height: AppTheme.sp8),
             ],
           ),
         ),
@@ -109,12 +165,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<void> _toggleGps() async {
     if (LocationService.isTracking) {
       LocationService.stopTracking();
-      showSuccessToast('GPS tracking stopped.');
+      showSuccessToast('GPS stopped.');
     } else {
       final ok = await LocationService.startTracking();
-      ok
-          ? showSuccessToast('GPS tracking started.')
-          : showErrorToast('Failed to start GPS tracking.');
+      ok ? showSuccessToast('GPS tracking on.') : showErrorToast('GPS failed to start.');
     }
     if (mounted) setState(() {});
   }
@@ -124,75 +178,88 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final pinAsync = ref.watch(pinProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: AppTheme.background,
+      extendBodyBehindAppBar: true,
+      appBar: _GlassAppBar(
         title: const AppLogoTitle(),
         actions: [
           IconButton(
             tooltip: 'GPS',
             icon: Icon(
               LocationService.isTracking
-                  ? Icons.satellite_alt_rounded
-                  : Icons.satellite_alt_outlined,
-              color: LocationService.isTracking ? AppTheme.secondary : null,
+                  ? Icons.location_on_rounded
+                  : Icons.location_off_rounded,
+              size: 22,
             ),
+            color: LocationService.isTracking
+                ? AppTheme.systemGreen
+                : AppTheme.labelTertiary,
             onPressed: _toggleGps,
           ),
           const AppLogoutButton(),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showDialog(context: context, builder: (_) => const AddPinDialog()),
-        child: const Icon(Icons.add_rounded),
+      floatingActionButton: _AppleFAB(
+        onPressed: () => showDialog(
+          context: context,
+          builder: (_) => const AddPinDialog(),
+        ),
       ),
       bottomNavigationBar: const AppBottomNav(currentRoute: '/dashboard'),
       body: pinAsync.when(
-        data: (pins) {
-          if (pins.isEmpty) return const _EmptyPins();
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
-            itemCount: pins.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final pin = pins[index];
-              return GestureDetector(
-                onLongPress: () => _showMoreOptions(pin),
-                child: VirtualPinTile(pin: pin),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading pins: $err')),
+        data: (pins) => pins.isEmpty
+            ? const _EmptyState()
+            : _PinList(pins: pins, onLongPress: _showActionsSheet),
+        loading: () => const Center(
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        error: (err, _) => Center(
+          child: Text(
+            'Could not load devices.',
+            style: const TextStyle(color: AppTheme.labelSecondary),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _EmptyPins extends StatelessWidget {
-  const _EmptyPins();
+// -------- sub-widgets --------
+
+class _GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final Widget title;
+  final List<Widget> actions;
+
+  const _GlassAppBar({required this.title, required this.actions});
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: PremiumPanel(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    final topPad = MediaQuery.of(context).padding.top;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          height: kToolbarHeight + topPad,
+          padding: EdgeInsets.only(top: topPad),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.82),
+            border: Border(
+              bottom: BorderSide(
+                color: AppTheme.opaqueSeparator.withValues(alpha: 0.5),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Row(
             children: [
-              Icon(
-                Icons.memory_rounded,
-                size: 48,
-                color: AppTheme.secondary.withValues(alpha: 0.45),
-              ),
-              const SizedBox(height: 16),
-              Text('No devices yet', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 6),
-              Text(
-                'Add a virtual pin to control your first device.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              const SizedBox(width: AppTheme.sp16),
+              title,
+              const Spacer(),
+              ...actions,
+              const SizedBox(width: AppTheme.sp8),
             ],
           ),
         ),
@@ -200,3 +267,218 @@ class _EmptyPins extends StatelessWidget {
     );
   }
 }
+
+class _GlassSheet extends StatelessWidget {
+  final Widget child;
+
+  const _GlassSheet({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(AppTheme.radiusXl),
+      ),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppTheme.radiusXl),
+            ),
+            border: Border(
+              top: BorderSide(
+                color: Colors.white.withValues(alpha: 0.5),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  const _SheetAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? AppTheme.danger : AppTheme.label;
+    return ListTile(
+      leading: Icon(icon, color: color, size: 20),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontSize: 17,
+          color: color,
+          letterSpacing: -0.41,
+        ),
+      ),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.sp20,
+        vertical: AppTheme.sp4,
+      ),
+    );
+  }
+}
+
+class _PinList extends StatelessWidget {
+  final List<VirtualPin> pins;
+  final void Function(VirtualPin) onLongPress;
+
+  const _PinList({required this.pins, required this.onLongPress});
+
+  @override
+  Widget build(BuildContext context) {
+    final topPad = MediaQuery.of(context).padding.top + kToolbarHeight;
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        AppTheme.sp16,
+        topPad + AppTheme.sp16,
+        AppTheme.sp16,
+        120,
+      ),
+      itemCount: pins.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return const SectionHeader('Devices');
+        }
+        final pin = pins[index - 1];
+        final isLast = index == pins.length;
+        final isFirst = index == 1;
+        return _PinCell(
+          pin: pin,
+          isFirst: isFirst,
+          isLast: isLast,
+          onLongPress: () => onLongPress(pin),
+        );
+      },
+    );
+  }
+}
+
+class _PinCell extends StatelessWidget {
+  final VirtualPin pin;
+  final bool isFirst;
+  final bool isLast;
+  final VoidCallback onLongPress;
+
+  const _PinCell({
+    required this.pin,
+    required this.isFirst,
+    required this.isLast,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.vertical(
+      top: isFirst ? const Radius.circular(AppTheme.radiusMd) : Radius.zero,
+      bottom: isLast ? const Radius.circular(AppTheme.radiusMd) : Radius.zero,
+    );
+
+    return Material(
+      color: AppTheme.surface,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onLongPress: onLongPress,
+        splashColor: AppTheme.accent.withValues(alpha: 0.06),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            VirtualPinTile(pin: pin),
+            if (!isLast)
+              const Divider(height: 0.5, indent: AppTheme.sp16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppTheme.sp32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppTheme.accent.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.square_rounded,
+                size: 36,
+                color: AppTheme.accent,
+              ),
+            ),
+            const SizedBox(height: AppTheme.sp20),
+            const Text(
+              'No Devices',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: AppTheme.sp8),
+            const Text(
+              'Tap the + button to add your first virtual pin.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                color: AppTheme.labelSecondary,
+                letterSpacing: -0.24,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AppleFAB extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _AppleFAB({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton(
+      onPressed: onPressed,
+      backgroundColor: AppTheme.accent,
+      foregroundColor: Colors.white,
+      elevation: 4,
+      shape: const CircleBorder(),
+      child: const Icon(Icons.add_rounded, size: 28),
+    );
+  }
+}
+
+// Convenience spacing constant used in sheets
+const double _sp56 = 56.0;
