@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from agents.biology_agent import VitalSigns
 
 _ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-load_dotenv(_ENV_PATH)
+load_dotenv(_ENV_PATH, override=True)
 
 _DATABASE_URL = 'https://hollow-core-default-rtdb.firebaseio.com'
 _AUTH_URL = 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword'

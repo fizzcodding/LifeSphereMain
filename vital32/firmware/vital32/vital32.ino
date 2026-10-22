@@ -14,6 +14,7 @@
 #include "hrv.h"
 #include "fever_trend.h"
 #include "parkinson_motor_screen.h"
+#include "ble_beacon.h"
 
 #define I2C_A_SDA 21
 #define I2C_A_SCL 22
@@ -437,6 +438,13 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(FB_WIFI_SSID, FB_WIFI_PASSWORD);
+
+  bleBeaconStart();
+#if HUMAN_READABLE_SERIAL
+  Serial.printf("BLE beacon: %s\n", vital32BleOk ? "advertising" : "FAILED");
+#else
+  Serial.printf("BOOT,BLE,%s\n", vital32BleOk ? "OK" : "FAIL");
+#endif
 
   firebaseQueue = xQueueCreate(8, sizeof(FirebaseMessage));
   if (firebaseQueue) xTaskCreate(firebaseTask, "vital32_firebase", VITAL32_FIREBASE_TASK_STACK, nullptr, 1, nullptr);

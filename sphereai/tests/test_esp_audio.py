@@ -208,6 +208,7 @@ def test_speak_blocking_routes_to_esp(fake, monkeypatch, tmp_path):
 
     stub = types.SimpleNamespace(init=lambda: Engine())
     monkeypatch.setitem(sys.modules, "pyttsx3", stub)
+    monkeypatch.setenv("SPHEREAI_TTS", "local")
     esp = EspAudio(port=fake.name)
     monkeypatch.setenv("SPHEREAI_AUDIO", "esp")
     monkeypatch.setattr(esp_audio, "_instance", esp)

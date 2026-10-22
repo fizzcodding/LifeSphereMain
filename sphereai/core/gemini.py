@@ -1,3 +1,4 @@
+import sys
 import json
 import threading
 from google import genai
@@ -62,6 +63,7 @@ def generate(contents: str, response_mime_type: str = 'application/json') -> str
 
         except Exception as e:
             last_error = e
+            print(f"[gemini] {model}: {e}", file=sys.stderr)
             continue
 
     raise RuntimeError(
@@ -93,6 +95,7 @@ def transcribe(wav_bytes: bytes) -> str:
 
         except Exception as e:
             last_error = e
+            print(f"[gemini] {model}: {e}", file=sys.stderr)
             continue
 
     raise RuntimeError(

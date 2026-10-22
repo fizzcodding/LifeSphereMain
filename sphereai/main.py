@@ -1,5 +1,8 @@
 import os
+import re
+import time
 import getpass
+import numpy as np
 from agents.language_agent import LanguageAgent
 from agents.biology_agent import BiologyAgent, mock_vitals
 from agents.voice_agent import VoiceAgent, mock_voice
@@ -8,7 +11,7 @@ from agents.emotional_agent import EmotionalAgent
 from fusion.emotional_fusion import EmotionalFusion
 from core.spherecore_client import SphereCoreClient
 from core.gemini import transcribe
-from core.speech import speak
+from core.speech import speak, speak_blocking
 from core.crisis import is_crisis, crisis_response
 from core.reminder_utils import infer_slot, validate_reminder
 
@@ -127,46 +130,77 @@ def _handle_action(action, lang_result):
         print('[SphereCore] Reminder saved to Firebase.' if ok else '[SphereCore] Failed to save reminder.')
 
 
-emergency_num = os.getenv('CRISIS_EMERGENCY_NUMBER', '999')
+def _select_esp_port() -> str | None:
+    """
+    If SPHEREAI_AUDIO=esp and the port can't be auto-detected, present an
+    interactive numbered list of all available serial ports so the user can
+    pick the one their ESP32-S3 is on.  Returns the chosen port string, or
+    None if the user skips / no ports exist.
+    """
+    from serial.tools import list_ports as _lp
 
-while True:
-    msg = input('You: ').strip()
-    voice_result = None
+    ports = list(_lp.comports())
+    if not ports:
+        print('[ESP] No serial ports found at all. Check your USB cable.\n')
+        return None
 
-    if msg.lower() in ('quit', 'exit', 'q'):
-        break
-    if not msg:
-        continue
-    if msg.lower() == 'login':
-        email_input = input('Email: ').strip()
-        password_input = getpass.getpass('Password: ')
-        if _try_login(email_input, password_input):
-            print('[SphereCore] Connected to Firebase.\n')
-        continue
+    print('\n[ESP] Could not find the ESP32-S3 automatically.')
+    print('      Which port is it on?\n')
+    for i, p in enumerate(ports, 1):
+        desc = p.description or 'unknown'
+        vid = f'VID={p.vid:#06x}' if p.vid else 'no VID'
+        print(f'  {i}) {p.device}  —  {desc}  ({vid})')
+    print(f'  {len(ports) + 1}) Skip / continue without ESP\n')
 
-    if msg.lower() in ('v', 'voice', 'p', 'ptt'):
+    while True:
         try:
-            if msg.lower() in ('p', 'ptt'):
-                from core.esp_audio import get_esp, use_esp
+            raw = input(f'Enter number [1-{len(ports) + 1}]: ').strip()
+            choice = int(raw)
+        except (ValueError, KeyboardInterrupt):
+            print('Skipping ESP.\n')
+            return None
+        if 1 <= choice <= len(ports):
+            selected = ports[choice - 1].device
+            os.environ['ESP_AUDIO_PORT'] = selected
+            print(f'[ESP] Using {selected}\n')
+            return selected
+        if choice == len(ports) + 1:
+            print('[ESP] Skipping ESP.\n')
+            return None
+        print(f'Please enter a number between 1 and {len(ports) + 1}.')
 
-                if not use_esp():
-                    print('Push to talk needs SPHEREAI_AUDIO=esp.\n')
-                    continue
-                print('Press the BOOT button on the ESP32-S3 to talk...')
-                if not get_esp().wait_button(timeout=60):
-                    print('No button press.\n')
-                    continue
-            print('Listening for 6 seconds...')
-            y = voice_agent.listen(6.0)
-            msg = transcribe(voice_agent.to_wav_bytes(y)).strip()
-            voice_result = voice_agent.analyze_signal(y)
-        except Exception as e:
-            print(f'[Voice] failed: {e}\n')
-            continue
-        if not msg:
-            print('Didn\'t catch anything.\n')
-            continue
-        print(f'You (voice): {msg}')
+
+def _ensure_esp_port() -> None:
+    """
+    Called once at startup when SPHEREAI_AUDIO=esp.
+    Tries the normal auto-detect; if that raises, falls back to the
+    interactive port picker and injects the choice into the environment so
+    every subsequent get_esp() call uses it.
+    """
+    from core.esp_audio import use_esp, find_port, EspAudioError
+
+    if not use_esp():
+        return
+
+    try:
+        port = find_port()
+        print(f'[ESP] Auto-detected ESP32-S3 on {port}\n')
+    except EspAudioError:
+        _select_esp_port()
+
+
+_ensure_esp_port()
+
+
+def _cue_tone() -> np.ndarray:
+    sr = 16000
+    t = np.linspace(0, 0.12, int(sr * 0.12), endpoint=False, dtype=np.float32)
+    return (0.4 * np.sin(2 * np.pi * 880 * t)).astype(np.float32)
+
+
+def _run_pipeline(msg: str, voice_result, use_blocking_speak: bool):
+    from core.esp_audio import use_esp
+    _blocking = use_blocking_speak or use_esp()
 
     try:
         vitals, bio_source = _get_vitals()
@@ -183,13 +217,18 @@ while True:
 
     except Exception as e:
         print(f'\nSphereAI: I\'m here - just give me a moment.\n')
-        continue
+        return None
+
+    emergency_num = os.getenv('CRISIS_EMERGENCY_NUMBER', '999')
 
     if is_crisis(msg, lang_result.emotion):
         crisis_reply = crisis_response(emergency_num)
         print()
         print(f'SphereAI: {crisis_reply}')
-        speak(crisis_reply)
+        if _blocking:
+            speak_blocking(crisis_reply)
+        else:
+            speak(crisis_reply)
         emotional_state.alert_level = 'high'
         if _firebase_ready:
             try:
@@ -197,11 +236,14 @@ while True:
             except Exception:
                 pass
         print()
-        continue
+        return lang_result
 
     print()
     print(f'SphereAI: {response_result.reply}')
-    speak(response_result.reply)
+    if _blocking:
+        speak_blocking(response_result.reply)
+    else:
+        speak(response_result.reply)
     print()
 
     if emotional_state.alert_level == 'high' and _firebase_ready:
@@ -254,3 +296,198 @@ while True:
     print()
 
     _handle_action(response_result.action, lang_result)
+    return lang_result
+
+
+def _is_stop_word(text: str) -> bool:
+    normalized = re.sub(r'[\s\W_]+', '', text.lower())
+    return normalized in ('stop', 'stoplistening')
+
+
+def _button_mode() -> None:
+    from core.esp_audio import use_esp, get_esp
+    import core.speech as _speech_mod
+
+    if not use_esp():
+        print('Button mode needs SPHEREAI_AUDIO=esp.\n')
+        return
+
+    rec_seconds = float(os.getenv('BUTTON_REC_SECONDS', '6.0'))
+    consecutive_failures = 0
+
+    print('Button mode on. Press the button to talk. Say "stop" to exit.\n')
+
+    while True:
+        print('Press the button to talk')
+        try:
+            get_esp().wait_button(timeout=None)
+            print('[ESP] button press received')
+
+            print('[ESP] playing cue tone...')
+            get_esp().play(_cue_tone(), 16000)
+            time.sleep(0.15)
+
+            print(f'[ESP] recording {rec_seconds:.1f}s...')
+            t1 = time.perf_counter()
+            y = voice_agent.listen(rec_seconds)
+            t_record = time.perf_counter() - t1
+            print(f'[ESP] recording done ({t_record:.1f}s)')
+
+            print('[ESP] transcribing...')
+            t2 = time.perf_counter()
+            msg = transcribe(voice_agent.to_wav_bytes(y)).strip()
+            voice_result = voice_agent.analyze_signal(y)
+            t_transcribe = time.perf_counter() - t2
+            print(f'[ESP] transcribed ({t_transcribe:.1f}s): "{msg}"')
+
+        except KeyboardInterrupt:
+            print('\n[Button mode off]')
+            return
+        except Exception as exc:
+            consecutive_failures += 1
+            print(f'[button] error: {exc}')
+            if consecutive_failures >= 5:
+                print('[Button mode off] too many consecutive errors.')
+                return
+            continue
+
+        consecutive_failures = 0
+
+        if not msg:
+            print("Didn't catch that")
+            continue
+
+        if _is_stop_word(msg):
+            print('[Button mode off]')
+            return
+
+        print(f'You (voice): {msg}')
+
+        _speech_elapsed = 0.0
+        _original_speak_blocking = _speech_mod.speak_blocking
+
+        def _timed_speak_blocking(text):
+            nonlocal _speech_elapsed
+            t = time.perf_counter()
+            _original_speak_blocking(text)
+            _speech_elapsed = time.perf_counter() - t
+
+        _speech_mod.speak_blocking = _timed_speak_blocking
+        try:
+            print('[ESP] running pipeline...')
+            t3 = time.perf_counter()
+            _run_pipeline(msg, voice_result, use_blocking_speak=True)
+            t_total = time.perf_counter() - t3
+        finally:
+            _speech_mod.speak_blocking = _original_speak_blocking
+
+        t_pipeline = t_total - _speech_elapsed
+
+        print(
+            f'[timing] record={t_record:.1f}s'
+            f' transcribe={t_transcribe:.1f}s'
+            f' pipeline={t_pipeline:.1f}s'
+            f' speech={_speech_elapsed:.1f}s'
+        )
+        time.sleep(0.4)
+
+
+emergency_num = os.getenv('CRISIS_EMERGENCY_NUMBER', '999')
+auto_mode = False
+
+while True:
+    if auto_mode:
+        try:
+            print('Listening for 6 seconds...')
+            y = voice_agent.listen(6.0)
+            msg = transcribe(voice_agent.to_wav_bytes(y)).strip()
+            voice_result = voice_agent.analyze_signal(y)
+        except KeyboardInterrupt:
+            auto_mode = False
+            print('\n[Auto mode off]')
+            continue
+        except Exception as e:
+            print(f'[Auto] error: {e}')
+            auto_mode = False
+            continue
+
+        if not msg:
+            continue
+
+        if _is_stop_word(msg):
+            auto_mode = False
+            print('[Auto mode off]')
+            continue
+
+        print(f'You (auto): {msg}')
+        _run_pipeline(msg, voice_result, use_blocking_speak=True)
+        time.sleep(0.4)
+        continue
+
+    try:
+        msg = input('You: ').strip()
+    except KeyboardInterrupt:
+        print()
+        break
+
+    voice_result = None
+
+    if msg.lower() in ('quit', 'exit', 'q'):
+        break
+    if not msg:
+        continue
+    if msg.lower() == 'login':
+        email_input = input('Email: ').strip()
+        password_input = getpass.getpass('Password: ')
+        if _try_login(email_input, password_input):
+            print('[SphereCore] Connected to Firebase.\n')
+        continue
+
+    if msg.lower() in ('a', 'auto'):
+        auto_mode = True
+        print('Auto mode on. Say "stop" to turn it off.')
+        continue
+
+    if msg.lower() in ('b', 'button'):
+        _button_mode()
+        continue
+
+    if msg.lower() in ('port', 'setport'):
+        import core.esp_audio as _esp_mod
+        _select_esp_port()
+        # Reset the cached ESP instance so the next get_esp() uses the new port
+        with _esp_mod._instance_lock:
+            if _esp_mod._instance is not None:
+                try:
+                    _esp_mod._instance.close()
+                except Exception:
+                    pass
+                _esp_mod._instance = None
+        print('[ESP] Port updated. The next ESP operation will reconnect.\n')
+        continue
+
+    if msg.lower() in ('v', 'voice', 'p', 'ptt'):
+        try:
+            if msg.lower() in ('p', 'ptt'):
+                from core.esp_audio import get_esp, use_esp
+
+                if not use_esp():
+                    print('Push to talk needs SPHEREAI_AUDIO=esp.\n')
+                    continue
+                print('Press the BOOT button on the ESP32-S3 to talk...')
+                if not get_esp().wait_button(timeout=60):
+                    print('No button press.\n')
+                    continue
+            print('Listening for 6 seconds...')
+            y = voice_agent.listen(6.0)
+            msg = transcribe(voice_agent.to_wav_bytes(y)).strip()
+            voice_result = voice_agent.analyze_signal(y)
+        except Exception as e:
+            print(f'[Voice] failed: {e}\n')
+            continue
+        if not msg:
+            print('Didn\'t catch anything.\n')
+            continue
+        print(f'You (voice): {msg}')
+
+    _run_pipeline(msg, voice_result, use_blocking_speak=False)

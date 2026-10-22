@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 # Explicit .env path (sphereai/.env) resolved from this file's location so that
 # loading works regardless of the process's current working directory.
 _ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-load_dotenv(_ENV_PATH)
+load_dotenv(_ENV_PATH, override=True)
 
 # NOTE: values below are read once at import time by design — this is the
 # project's config module and consumers (core/gemini.py) build clients from
