@@ -30,6 +30,18 @@ class AppTheme {
   static const danger  = systemRed;
   static const success = systemGreen;
 
+  // ---- Legacy aliases (keep existing screens compiling) ----
+  static const primary   = accent;
+  static const secondary = systemIndigo;
+  static const ink       = label;
+  static const muted     = labelTertiary;
+  static const border    = opaqueSeparator;
+  static BoxShadow get softShadow => BoxShadow(
+    color: Colors.black.withValues(alpha: 0.06),
+    blurRadius: 20,
+    offset: const Offset(0, 4),
+  );
+
   // Radius tokens
   static const double radiusSm  = 10.0;
   static const double radiusMd  = 14.0;
